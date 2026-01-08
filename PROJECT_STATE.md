@@ -1,12 +1,13 @@
-> **WAKE-UP:** PHASE_6_DEBUG_VISUALS | 2026-01-07 | 2026-01-07-Phase6-GPU | RECONSTRUCTION: <15s
+> **WAKE-UP:** PHASE_7_AI_TEAM_OPTIMIZATION | 2026-01-08 | 2026-01-08-Phase7-Experiments | RECONSTRUCTION: <30s
 
 # 🧠 APIS-OVERSEER PROJECT STATE
 
-**Last Updated:** 2026-01-07
-**Current Phase:** Phase 6 - Debug Visuals & GPU Integration
-**Status:** GPU-accelerated stress visualization system COMPLETE
-**Performance Budget:** ≤1.0ms debug overhead / 14ms auto-throttle breach
-**ARCHIVE_PULSE:** 🟢 | Last Checked: 2026-01-07 | Next Due: 2026-01-14
+**Last Updated:** 2026-01-08
+**Current Phase:** Phase 7 - AI Team Optimization Experiments
+**Status:** Supervisor-Worker pattern ACTIVE, baseline metrics collection in progress
+**Performance Budget:** ≤8ms frame time, +5MB memory limit, ≤1.0ms debug overhead
+**Experiment Status:** Experiment 1 (Supervisor-Worker) - Session 0 (preparation complete)
+**ARCHIVE_PULSE:** 🟢 | Last Checked: 2026-01-08 | Next Due: 2026-01-15
 
 ---
 
@@ -37,13 +38,19 @@
 3. ✅ **Phase 3:** Agent intelligence (tier behaviors)
 4. ✅ **Phase 4:** The Garden (pheromones, resources)
 5. ✅ **Phase 5:** Archive Governance (documentation, handoff protocol)
-6. ✅ **Phase 6:** Debug Visuals & GPU Integration **← YOU ARE HERE**
+6. ✅ **Phase 6:** Debug Visuals & GPU Integration
+7. 🔬 **Phase 7:** AI Team Optimization Experiments **← YOU ARE HERE**
+   - **Goal:** Develop validated measurement frameworks for AI team orchestration
+   - **Method:** Systematic comparison of Supervisor-Worker, Swarm, Sequential patterns
+   - **Deliverables:** Metrics dataset, failure mode catalog, replication protocol
+   - **Simulation Target:** Scale to 5000-10000 bees, add advanced behaviors
 
 ### Active Invariants
 - **[ARCH-COMM-01]** Status Page Invariant: This file is the single source of truth
-- **[ARCH-COMM-02]** 15s Reconstruction Goal: Any agent must reconstruct context in <15s
+- **[ARCH-COMM-02]** 30s Reconstruction Goal (Phase 7): Versioned contracts enable context reconstruction in <30s
 - **[ARCH-COMM-03]** Chronicle Schema: 140-char max entries with LOCK CHECK
 - **[ARCH-COMM-04]** Failover Budget: Communication overhead ≤0.1% of simulation budget
+- **[ARCH-COMM-05]** Versioned Contract Protocol (Phase 7): All handoffs use versioned contracts with constraints, decisions, state, metrics
 
 ### Red Lines (Non-Negotiable Constraints)
 1. **Velocity Magnitude Lock:** All bees capped at max_speed (no "bullet bees")
@@ -64,6 +71,7 @@
 | 002 | 2026-01-07 | ARCH | GOV | Locked Phase 4 communication rituals & failover budgets. | YES |
 | 003 | 2026-01-07 | BUILD | IMPL | Phase 6: GPU debug visuals (ModernGL distortion, stress halos, vignette, auto-throttle at 14ms). | YES |
 | 004 | 2026-01-07 | BUILD | PERF | TRIAGE-004: Vectorized flower interaction (broadcasting), preserved harvest noise, 2Hz RAM monitoring. | YES |
+| 005 | 2026-01-08 | ARCH | GOV | Phase 7 launch: versioned contracts, metrics framework, Supervisor-Worker experiment design. | YES |
 
 **Chronicle Rules:**
 - **WHY Field:** Hard cap at 140 characters (enforced by Claude Code validation)
@@ -97,11 +105,16 @@
 - [PHASE4_IMPLEMENTATION_REPORT.md](PHASE4_IMPLEMENTATION_REPORT.md) - Phase 4 completion report
 - [AI_RULES.md](AI_RULES.md) - Original multi-agent protocol
 
-### Phase 5 Governance (NEW)
+### Phase 5 Governance
 - [docs/memos/governance/2026-01-07_GOV_Phase5_Archive_Governance.md](docs/memos/governance/2026-01-07_GOV_Phase5_Archive_Governance.md) - Archive governance protocol
 - [docs/templates/MEMO_TEMPLATE.md](docs/templates/MEMO_TEMPLATE.md) - Standardized memo template with 140-char WHY cap
 - [docs/templates/HANDOFF_TEMPLATE.md](docs/templates/HANDOFF_TEMPLATE.md) - Agent transition template
 - [docs/baselines/phase-4-complete/MANIFEST.md](docs/baselines/phase-4-complete/MANIFEST.md) - Phase 4 frozen baseline
+
+### Phase 7 Orchestration Experiments (NEW)
+- [docs/phase7/versioned_contracts.md](docs/phase7/versioned_contracts.md) - Versioned contract protocol & template
+- [docs/phase7/metrics_framework.md](docs/phase7/metrics_framework.md) - Measurement methodology for team effectiveness
+- [docs/phase7/experiment_design.md](docs/phase7/experiment_design.md) - Scientific protocol for orchestration pattern testing
 
 ### Tests
 - [test_phase4.py](test_phase4.py) - 600-frame validation suite
@@ -128,33 +141,43 @@ python -m py_compile simulation.py
 
 ---
 
-## 🔄 Active Agents & Roles
+## 🔄 Active Agents & Roles (Phase 7 Updated)
 
-| Role | Agent | Responsibilities |
-|------|-------|------------------|
-| **Lead Architect** | Gemini 2.5 Pro | System design, invariant locks, phase planning |
-| **Builder** | Claude Sonnet 4.5 | Implementation, testing, documentation |
-| **Biologist** | Grok | Behavioral realism, ethological validation |
-| **Performance** | DeepSeek | Optimization, profiling, budget enforcement |
-| **Librarian** | The Brain | UX design, information architecture |
-| **Coordinator** | Human (Merchant) | Final approval, priority decisions |
+| Role | Agent | Responsibilities | Phase 7 Role |
+|------|-------|------------------|--------------|
+| **Lead Architect** | Gemini 2.5 Pro | System design, invariant locks, phase planning | Architectural review |
+| **Builder** | Claude Sonnet 4.5 | Implementation, testing, documentation | Primary worker (Supervisor-Worker) |
+| **Integration Surgeon** | Grok | Cross-system integration, realism validation | Context archivist (48hr trial) |
+| **Performance Guru** | DeepSeek | Optimization, profiling, budget enforcement | **Process analyst & metric designer** |
+| **Librarian** | The Brain | UX design, information architecture | Documentation support |
+| **Supervisor** | Human (Merchant) | Final approval, priority decisions | **Active supervisor (Experiment 1)** |
 
 ---
 
 ## 💡 Current Context (For Incoming Agents)
 
 ### What Just Happened
-**Phase 6 + TRIAGE-004 completed on 2026-01-07**:
-- GPU-accelerated debug visuals (ModernGL distortion, stress halos, vignette) with auto-throttle
-- Vectorized flower interaction using (N×M) broadcasting (eliminated nested Python loops)
-- Preserved biological harvest noise (±15% variation with nectar attenuation)
-- Performance halt condition: Vanguard update >2.0ms triggers illusion risk warnings
-- RAM monitoring at 2Hz via psutil
+**Phase 7 launched on 2026-01-08**:
+- Created versioned contract protocol for structured handoffs with evidence
+- Established metrics framework: CSR, CVE, RTI, HDL, FPR metrics
+- Designed Experiment 1: Supervisor-Worker pattern baseline
+- Prepared directory structure: docs/phase7/ with metrics/, contracts/, analysis/
+- Updated PROJECT_STATE.md with Phase 7 goals and invariants
 
-### What's Next
-1. **Performance Validation:** Run test_phase4.py to verify ≤1.0ms debug overhead target
-2. **GPU Fallback Testing:** Verify silent CPU fallback on systems without OpenGL 3.3+
-3. **Awaiting Phase 7 Spec:** Lead Architect will define next evolution
+**Previous (Phase 6 completed 2026-01-07)**:
+- GPU-accelerated debug visuals with auto-throttle
+- TRIAGE-004: Vectorized flower interaction (broadcasting)
+- Performance: 5.67ms avg frame time @ 2000 bees
+
+### What's Next (Experiment 1: Supervisor-Worker Pattern)
+1. **Session 1 (Tomorrow):** Scale to 3000 bees, establish memory baseline, collect first metrics
+2. **Session 2:** Scale to 5000 bees, implement advanced behavior (waggle dance or guard bees)
+3. **Session 3:** Optimization pass, complete dataset, analyze Supervisor-Worker effectiveness
+
+**Phase 7 Targets:**
+- Simulation: 5000-10000 bees @ ≤8ms, +5MB memory limit
+- Process: CSR ≥90%, RTI ≤30s, HDL ≤3/hour
+- Deliverables: Comparative metrics on 2+ orchestration patterns
 
 ### Known Issues
 - Halo system uses Surface.set_alpha() per bee (expensive) - vectorization needed if >3000 visible halos
