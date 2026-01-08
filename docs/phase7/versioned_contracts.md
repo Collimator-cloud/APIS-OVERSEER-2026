@@ -21,6 +21,8 @@ Versioned contracts provide structured handoff documentation between AI agents, 
 
 **Version:** X.Y (major.minor - increment on significant changes)
 **Date:** YYYY-MM-DD HH:MM
+**Track:** [Bee / Orchestration / Both] + Time Allocation: [Bee: X% / Orchestration: Y% / Overhead: Z%]
+**Priority:** [Primary track focus for this session]
 **From Agent:** [Agent Name/Role]
 **To Agent:** [Agent Name/Role] or "Next Session"
 **Session Duration:** [Time spent on task]
@@ -50,11 +52,19 @@ Specific, measurable next actions (prioritized):
 3. [Action 3] — Expected outcome: [measurable result]
 
 ### METRICS (Phase 7)
-Novel metrics for team effectiveness:
-- Constraint Preservation: [N/M constraints intact from previous session]
-- Velocity Efficiency: [functional LOC per 1000 tokens]
-- Reconstruction Time: [seconds to full context]
-- Human Decisions Required: [count this session]
+
+#### Bee Track Metrics:
+- Frame Time @ Scale: [X.XX]ms @ [N] bees (target: ≤8ms)
+- Memory Scaling Factor: [X.XX]MB per 1000 bees
+- Bee Joy Index (BJI): [1-5] (Coordinator: [N], Agent: [N])
+- Feature Progress: [Features completed this session]
+
+#### Orchestration Track Metrics:
+- Constraint Preservation (CSR): [N/M constraints intact from previous session]
+- Velocity Efficiency (CVE): [functional LOC per 1000 tokens]
+- Reconstruction Time (RTI): [seconds to full context]
+- Human Decisions Required (HDL): [count this session]
+- Time Allocation Balance: Bee [X]% / Orchestration [Y]% / Overhead [Z]%
 
 ### RISKS
 Known risks or technical debt:
