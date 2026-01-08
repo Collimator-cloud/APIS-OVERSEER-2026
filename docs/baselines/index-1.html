@@ -1,0 +1,205 @@
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/><title>Unknown </title></head><body>
+<h1 id="version-baseline-manifest">VERSION BASELINE MANIFEST</h1>
+<hr />
+<h2 id="metadata">METADATA</h2>
+<p><strong>Version Tag:</strong> <code>[v1.0.0 / Phase-X]</code>
+<strong>Date:</strong> <code>[YYYY-MM-DD]</code>
+<strong>Author:</strong> <code>[ROLE]</code>
+<strong>Status:</strong> <code>[PRODUCTION / STAGING / EXPERIMENTAL]</code></p>
+<hr />
+<h2 id="visual-baseline">VISUAL BASELINE</h2>
+<p><img alt="Visual Baseline" src="./visual_baseline.png" /></p>
+<p><strong>Image Requirements:</strong>
+- File size: ≤150KB (PNG-8 or JPEG compression required)
+- Format: PNG or JPEG
+- Content: Representative screenshot showing system state
+- Location: Same directory as this MANIFEST.md</p>
+<hr />
+<h2 id="performance-snapshot">PERFORMANCE SNAPSHOT</h2>
+<table>
+<thead>
+<tr>
+<th align="left">Metric</th>
+<th align="left">Value</th>
+<th align="left">Target</th>
+<th align="left">Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">Avg Frame Time</td>
+<td align="left">[X.XX]ms</td>
+<td align="left">≤8ms</td>
+<td align="left">[✅/⚠️/❌]</td>
+</tr>
+<tr>
+<td align="left">Simulation Time</td>
+<td align="left">[X.XX]ms</td>
+<td align="left">≤4ms</td>
+<td align="left">[✅/⚠️/❌]</td>
+</tr>
+<tr>
+<td align="left">FPS</td>
+<td align="left">[XXX] FPS</td>
+<td align="left">≥120 FPS</td>
+<td align="left">[✅/⚠️/❌]</td>
+</tr>
+<tr>
+<td align="left">Agent Count</td>
+<td align="left">[XXXX]</td>
+<td align="left">[XXXX]</td>
+<td align="left">✅</td>
+</tr>
+<tr>
+<td align="left">Performance Headroom</td>
+<td align="left">[X.XX]ms</td>
+<td align="left">-</td>
+<td align="left">[✅/⚠️/❌]</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Critical Systems Status:</strong>
+- [✅/❌] System Name 1 (brief description)
+- [✅/❌] System Name 2 (brief description)
+- [✅/❌] System Name 3 (brief description)</p>
+<hr />
+<h2 id="architecture-state">ARCHITECTURE STATE</h2>
+<h3 id="active-phases">Active Phases</h3>
+<p>List all completed and active development phases:
+1. ✅ Phase 1: Foundation
+2. ✅ Phase 2: Enhancement A
+3. ⏳ Phase 3: Current Work</p>
+<h3 id="red-lines-non-negotiable-constraints">Red Lines (Non-Negotiable Constraints)</h3>
+<ol>
+<li>Constraint Name: Brief description of invariant</li>
+<li>Constraint Name: Brief description of invariant</li>
+<li>Constraint Name: Brief description of invariant</li>
+</ol>
+<h3 id="known-technical-debt">Known Technical Debt</h3>
+<ul>
+<li>Item 1: Description and reason for deferral</li>
+<li>Item 2: Description and reason for deferral</li>
+</ul>
+<hr />
+<h2 id="file-inventory">FILE INVENTORY</h2>
+<h3 id="core-files-with-line-counts-and-checksums-if-needed">Core Files (with line counts and checksums if needed)</h3>
+<table>
+<thead>
+<tr>
+<th align="left">File</th>
+<th align="left">Lines</th>
+<th align="left">Purpose</th>
+<th align="left">Modified</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><a href="../../config.py">config.py</a></td>
+<td align="left">XXX</td>
+<td align="left">Configuration constants</td>
+<td align="left">YYYY-MM-DD</td>
+</tr>
+<tr>
+<td align="left"><a href="../../simulation.py">simulation.py</a></td>
+<td align="left">XXX</td>
+<td align="left">Main simulation loop</td>
+<td align="left">YYYY-MM-DD</td>
+</tr>
+<tr>
+<td align="left"><a href="../../biology.py">biology.py</a></td>
+<td align="left">XXX</td>
+<td align="left">Behavior logic</td>
+<td align="left">YYYY-MM-DD</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dependencies">Dependencies</h3>
+<p><code>numpy==X.X.X
+pygame==X.X.X
+numba==X.X.X</code></p>
+<hr />
+<h2 id="test-results">TEST RESULTS</h2>
+<h3 id="validation-suite">Validation Suite</h3>
+<p>```bash</p>
+<h1 id="command-used-for-validation">Command used for validation</h1>
+<p>python test_suite.py
+```</p>
+<p><strong>Results:</strong>
+- Total Tests: XX
+- Passed: XX
+- Failed: XX
+- Warnings: XX</p>
+<p><strong>Critical Validations:</strong>
+- ✅ Performance budget compliance
+- ✅ No simulation divergence
+- ✅ All red-line invariants enforced</p>
+<hr />
+<h2 id="reproduction-steps">REPRODUCTION STEPS</h2>
+<h3 id="environment-setup">Environment Setup</h3>
+<ol>
+<li>Clone repository</li>
+<li>Install dependencies: <code>pip install -r requirements.txt</code></li>
+<li>Verify Python version: <code>python --version</code> (Expected: 3.X.X)</li>
+</ol>
+<h3 id="running-the-system">Running the System</h3>
+<p>```bash</p>
+<h1 id="interactive-mode">Interactive mode</h1>
+<p>python environment.py</p>
+<h1 id="headless-validation">Headless validation</h1>
+<p>python test_suite.py
+```</p>
+<hr />
+<h2 id="known-issues">KNOWN ISSUES</h2>
+<table>
+<thead>
+<tr>
+<th align="left">ID</th>
+<th align="left">Severity</th>
+<th align="left">Description</th>
+<th align="left">Workaround</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">[001]</td>
+<td align="left">LOW</td>
+<td align="left">First-frame JIT spike</td>
+<td align="left">Expected, one-time cost</td>
+</tr>
+<tr>
+<td align="left">[002]</td>
+<td align="left">MEDIUM</td>
+<td align="left">Issue description</td>
+<td align="left">Temporary fix available</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="changelog-from-previous-version">CHANGELOG FROM PREVIOUS VERSION</h2>
+<h3 id="added">Added</h3>
+<ul>
+<li>Feature/system name: Brief description</li>
+</ul>
+<h3 id="changed">Changed</h3>
+<ul>
+<li>Component name: What changed and why</li>
+</ul>
+<h3 id="removed">Removed</h3>
+<ul>
+<li>Deprecated feature: Reason for removal</li>
+</ul>
+<h3 id="performance-improvements">Performance Improvements</h3>
+<ul>
+<li>Optimization name: Impact on metrics</li>
+</ul>
+<hr />
+<h2 id="handoff-notes">HANDOFF NOTES</h2>
+<p><strong>For Future Developers:</strong>
+- Key consideration 1
+- Key consideration 2
+- Where to find additional context</p>
+<p><strong>Archive Location:</strong>
+- This baseline is stored in: <code>docs/baselines/[VERSION_TAG]/</code></p>
+<hr />
+<p><strong>LOCK CHECK:</strong> <code>YES</code> — Baseline validated and frozen.</p>
+</body></html>

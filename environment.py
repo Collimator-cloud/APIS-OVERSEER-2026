@@ -1,0 +1,404 @@
+"""
+APIS-OVERSEER Environment
+Spatial grid, collision mask, food sources, hive structure
+"""
+
+import numpy as np
+import pygame
+from config import *
+
+# ============================================================================
+# WORLD ENVIRONMENT
+# ============================================================================
+
+class Environment:
+    """
+    World environment with hive, food sources, and spatial structures.
+    """
+
+    def __init__(self):
+        """Initialize environment with hive and food sources."""
+        # Hive center (already defined in config)
+        self.hive_center = np.array([HIVE_CENTER_X, HIVE_CENTER_Y], dtype=np.float32)
+
+        # Food sources (scattered around world)
+        self.food_sources = self._generate_food_sources()
+
+        # Collision mask (precomputed in config)
+        self.collision_mask = COLLISION_MASK
+
+        # Spatial grid (initialized empty, rebuilt each frame)
+        self.spatial_grid = None
+
+    def _generate_food_sources(self, num_sources=5):
+        """
+        Generate random food source positions.
+
+        Args:
+            num_sources: Number of food sources to create
+
+        Returns:
+            (N, 2) array of food positions
+        """
+        # Avoid placing food too close to hive
+        food_sources = []
+
+        for _ in range(num_sources):
+            while True:
+                x = np.random.uniform(100, WORLD_WIDTH - 100)
+                y = np.random.uniform(100, WORLD_HEIGHT - 100)
+
+                # Check distance from hive
+                dist = np.sqrt((x - HIVE_CENTER_X)**2 + (y - HIVE_CENTER_Y)**2)
+                if dist > HIVE_ENTRANCE_RADIUS * 5:  # At least 5× entrance radius away
+                    food_sources.append([x, y])
+                    break
+
+        return np.array(food_sources, dtype=np.float32)
+
+    def rebuild_spatial_grid(self, positions):
+        """
+        Rebuild spatial grid from bee positions.
+
+        Args:
+            positions: (N, 2) array of bee positions
+
+        Returns:
+            List of lists (grid cells containing bee indices)
+        """
+        from biology import rebuild_spatial_grid
+        self.spatial_grid = rebuild_spatial_grid(positions, GRID_CELLS)
+        return self.spatial_grid
+
+    def get_collision_alpha(self, x, y):
+        """
+        Get collision mask alpha at world position (for Nebula fade).
+
+        Args:
+            x, y: World coordinates
+
+        Returns:
+            Alpha value [0, 1]
+        """
+        mask_x = int(x / WORLD_WIDTH * COLLISION_MASK_RES)
+        mask_y = int(y / WORLD_HEIGHT * COLLISION_MASK_RES)
+
+        mask_x = np.clip(mask_x, 0, COLLISION_MASK_RES - 1)
+        mask_y = np.clip(mask_y, 0, COLLISION_MASK_RES - 1)
+
+        return self.collision_mask[mask_y, mask_x]
+
+    def render_hive(self, screen, camera_x, camera_y, screen_width, screen_height):
+        """
+        Render hive structure.
+
+        Args:
+            screen: Pygame surface
+            camera_x, camera_y: Camera position
+            screen_width, screen_height: Screen dimensions
+        """
+        # Transform to screen space
+        screen_x = self.hive_center[0] - camera_x + screen_width / 2
+        screen_y = self.hive_center[1] - camera_y + screen_height / 2
+
+        # Draw hive entrance (dark circle)
+        pygame.draw.circle(
+            screen,
+            (80, 60, 40),
+            (int(screen_x), int(screen_y)),
+            HIVE_ENTRANCE_RADIUS,
+            0  # Filled
+        )
+
+        # Draw entrance border (brighter)
+        pygame.draw.circle(
+            screen,
+            (120, 100, 60),
+            (int(screen_x), int(screen_y)),
+            HIVE_ENTRANCE_RADIUS,
+            2  # Outline
+        )
+
+        # Draw inner entrance (darker, for depth)
+        pygame.draw.circle(
+            screen,
+            (40, 30, 20),
+            (int(screen_x), int(screen_y)),
+            int(HIVE_ENTRANCE_RADIUS * 0.6),
+            0
+        )
+
+    def render_food_sources(self, screen, camera_x, camera_y, screen_width, screen_height):
+        """
+        Render food sources.
+
+        Args:
+            screen: Pygame surface
+            camera_x, camera_y: Camera position
+            screen_width, screen_height: Screen dimensions
+        """
+        for food in self.food_sources:
+            screen_x = food[0] - camera_x + screen_width / 2
+            screen_y = food[1] - camera_y + screen_height / 2
+
+            # Skip if off-screen
+            if not (0 <= screen_x < screen_width and 0 <= screen_y < screen_height):
+                continue
+
+            # Draw food source (bright green circle with glow)
+            # Outer glow
+            pygame.draw.circle(
+                screen,
+                (100, 200, 100, 128),
+                (int(screen_x), int(screen_y)),
+                25,
+                0
+            )
+
+            # Inner food
+            pygame.draw.circle(
+                screen,
+                (150, 255, 150),
+                (int(screen_x), int(screen_y)),
+                15,
+                0
+            )
+
+            # Core
+            pygame.draw.circle(
+                screen,
+                (200, 255, 200),
+                (int(screen_x), int(screen_y)),
+                8,
+                0
+            )
+
+    def render_collision_mask_debug(self, screen, camera_x, camera_y, screen_width, screen_height):
+        """
+        Debug: Render collision mask as overlay.
+
+        Args:
+            screen: Pygame surface
+            camera_x, camera_y: Camera position
+            screen_width, screen_height: Screen dimensions
+        """
+        # Downsample collision mask for performance
+        step = 20  # pixels per sample
+
+        for world_y in range(0, WORLD_HEIGHT, step):
+            for world_x in range(0, WORLD_WIDTH, step):
+                alpha = self.get_collision_alpha(world_x, world_y)
+
+                # Skip fully transparent
+                if alpha > 0.95:
+                    continue
+
+                screen_x = world_x - camera_x + screen_width / 2
+                screen_y = world_y - camera_y + screen_height / 2
+
+                # Skip if off-screen
+                if not (0 <= screen_x < screen_width and 0 <= screen_y < screen_height):
+                    continue
+
+                # Red = blocked, transparent = passable
+                color = (255, 0, 0, int((1.0 - alpha) * 100))
+                pygame.draw.circle(screen, color, (int(screen_x), int(screen_y)), 3)
+
+
+# ============================================================================
+# SPATIAL QUERY HELPERS
+# ============================================================================
+
+def get_neighbors_in_radius(position, all_positions, radius):
+    """
+    Get all positions within radius (brute force, for validation).
+
+    Args:
+        position: (2,) array
+        all_positions: (N, 2) array
+        radius: Float
+
+    Returns:
+        List of indices within radius
+    """
+    dists = np.linalg.norm(all_positions - position, axis=1)
+    return np.where(dists < radius)[0]
+
+
+def check_collision_circle(pos_a, radius_a, pos_b, radius_b):
+    """
+    Check circle-circle collision.
+
+    Args:
+        pos_a: (2,) array
+        radius_a: Float
+        pos_b: (2,) array
+        radius_b: Float
+
+    Returns:
+        Boolean (True if colliding)
+    """
+    dist = np.linalg.norm(pos_a - pos_b)
+    return dist < (radius_a + radius_b)
+
+
+def world_to_grid_cell(position, grid_cells=GRID_CELLS):
+    """
+    Convert world position to grid cell indices.
+
+    Args:
+        position: (2,) array [x, y]
+        grid_cells: Number of grid cells per axis
+
+    Returns:
+        (cell_x, cell_y) tuple
+    """
+    cell_size = WORLD_WIDTH / grid_cells
+
+    cell_x = int(position[0] / cell_size)
+    cell_y = int(position[1] / cell_size)
+
+    cell_x = np.clip(cell_x, 0, grid_cells - 1)
+    cell_y = np.clip(cell_y, 0, grid_cells - 1)
+
+    return cell_x, cell_y
+
+
+def grid_cell_to_world(cell_x, cell_y, grid_cells=GRID_CELLS):
+    """
+    Convert grid cell indices to world position (center of cell).
+
+    Args:
+        cell_x, cell_y: Grid cell indices
+        grid_cells: Number of grid cells per axis
+
+    Returns:
+        (x, y) tuple (world coordinates)
+    """
+    cell_size = WORLD_WIDTH / grid_cells
+
+    x = (cell_x + 0.5) * cell_size
+    y = (cell_y + 0.5) * cell_size
+
+    return x, y
+
+
+# ============================================================================
+# TEMPERATURE FIELD (Optional enhancement)
+# ============================================================================
+
+class TemperatureField:
+    """
+    Optional: Dynamic temperature field for warmth seeking.
+    Hive radiates heat, edges are cold.
+    """
+
+    def __init__(self, resolution=64):
+        """
+        Initialize temperature field.
+
+        Args:
+            resolution: Field resolution (64×64)
+        """
+        self.resolution = resolution
+        self.field = np.zeros((resolution, resolution), dtype=np.float32)
+        self._initialize_field()
+
+    def _initialize_field(self):
+        """Initialize temperature gradient (hot at hive, cold at edges)."""
+        y, x = np.ogrid[:self.resolution, :self.resolution]
+
+        # Hive position in field space
+        hive_x = HIVE_CENTER_X / WORLD_WIDTH * self.resolution
+        hive_y = HIVE_CENTER_Y / WORLD_HEIGHT * self.resolution
+
+        # Distance from hive
+        dist = np.sqrt((x - hive_x)**2 + (y - hive_y)**2)
+
+        # Temperature falls off with distance (sigmoid for smooth gradient)
+        max_dist = self.resolution * 0.7
+        self.field = 1.0 / (1.0 + (dist / max_dist)**2)
+
+    def get_temperature(self, x, y):
+        """
+        Sample temperature at world position.
+
+        Args:
+            x, y: World coordinates
+
+        Returns:
+            Temperature [0, 1]
+        """
+        field_x = int(x / WORLD_WIDTH * self.resolution)
+        field_y = int(y / WORLD_HEIGHT * self.resolution)
+
+        field_x = np.clip(field_x, 0, self.resolution - 1)
+        field_y = np.clip(field_y, 0, self.resolution - 1)
+
+        return self.field[field_y, field_x]
+
+    def update(self, dt):
+        """
+        Optional: Update temperature field (e.g., cooling over time).
+
+        Args:
+            dt: Delta time in seconds
+        """
+        # Could add dynamic cooling, but for now static field is fine
+        pass
+
+
+# ============================================================================
+# ZONE SYSTEM (Optional)
+# ============================================================================
+
+class Zone:
+    """
+    Spatial zone with properties (e.g., Zone 3 = choke point near hive).
+    """
+
+    def __init__(self, center, radius, zone_type='neutral'):
+        """
+        Initialize zone.
+
+        Args:
+            center: (2,) array [x, y]
+            radius: Float
+            zone_type: String ('neutral', 'choke', 'food', etc.)
+        """
+        self.center = center
+        self.radius = radius
+        self.zone_type = zone_type
+
+    def contains(self, position):
+        """
+        Check if position is inside zone.
+
+        Args:
+            position: (2,) array [x, y]
+
+        Returns:
+            Boolean
+        """
+        dist = np.linalg.norm(position - self.center)
+        return dist < self.radius
+
+    def get_distance(self, position):
+        """
+        Get distance from zone center.
+
+        Args:
+            position: (2,) array [x, y]
+
+        Returns:
+            Float (distance)
+        """
+        return np.linalg.norm(position - self.center)
+
+
+# Zone 3 (choke point) example
+ZONE_CHOKE = Zone(
+    center=np.array([HIVE_CENTER_X, HIVE_CENTER_Y], dtype=np.float32),
+    radius=HIVE_ENTRANCE_RADIUS * 1.5,
+    zone_type='choke'
+)

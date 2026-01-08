@@ -1,0 +1,14 @@
+# APIS-OVERSEER Dependencies
+# Phase 6: Debug Visuals & GPU Integration
+
+# Core simulation dependencies
+numpy>=1.24.0
+pygame-ce>=2.5.0
+scipy>=1.10.0
+
+# Phase 6: GPU-accelerated debug visuals
+# Requires OpenGL 3.3+ drivers (verified by check_gpu.py)
+moderngl>=5.8.0
+
+# TRIAGE-004: Performance monitoring
+psutil>=5.9.0
