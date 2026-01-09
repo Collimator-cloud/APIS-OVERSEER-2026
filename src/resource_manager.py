@@ -103,7 +103,7 @@ class ResourceManager:
         np.logical_and(in_contact, valid_flowers[np.newaxis, :], out=valid_contact)
 
         # Find closest valid flower for each bee
-        np.where(valid_contact, distances, np.inf, out=masked_distances)
+        masked_distances = np.where(valid_contact, distances, np.inf)
         closest_flowers = np.argmin(masked_distances, axis=1)
 
         # Identify bees that have valid contact (min distance < inf)
