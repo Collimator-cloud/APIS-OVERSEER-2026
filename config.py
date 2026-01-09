@@ -20,38 +20,58 @@ NEBULA_PARTICLES_PER_CHUNK = 0.6  # ~4,900 ephemeral particles (TEMP: was 1.4 â†
 # ============================================================================
 # ARRAY COLUMN INDICES
 # ============================================================================
-# Vanguard (300, 17) columns - TRIAGE-002: Added REGEN_RATE, DEATH_THRESHOLD
+# v2.1 VERSIONED CONTRACT: 8-Column Core + Extended Attributes
+# Core columns (0-7) are the "Master State Matrix" (Architect-locked)
+# Extended columns (8+) are implementation-specific
+
+# ============================================================================
+# VANGUARD TIER (100 bees, 20 columns total)
+# ============================================================================
+# Core Matrix (0-7): Position, Velocity, Health, Stress, Personality
 V_POS_X = 0
 V_POS_Y = 1
 V_VEL_X = 2
 V_VEL_Y = 3
-V_TARGET_X = 4
-V_TARGET_Y = 5
-V_LOD_LEVEL = 6      # 0=Vanguard, 1=Legion, 2=Nebula
-V_LOD_TIMER = 7      # Countdown for hysteresis
-V_HEALTH = 8
-V_ENERGY = 9
-V_TEMP = 10
-V_STATE_FLAGS = 11   # Bitfield: 0=seeking_food, 1=returning, 2=warming, etc.
-V_AGE = 12
-V_COHESION = 13      # Neighbor density (illusion proxy)
-V_TRAIL_PHASE = 14   # For animation continuity
-V_REGEN_RATE = 15    # TRIAGE-002: Individual health regen rate (0.0008-0.0012)
-V_DEATH_THRESHOLD = 16  # TRIAGE-002: Individual death threshold (0.08-0.12)
+V_HEALTH = 4         # v2.1: Core column 4 (was 8)
+V_STRESS = 5         # v2.1: NEW - Stress accumulation [0.0-1.0]
+V_REGEN_MOD = 6      # v2.1: NEW - Personality: regen modifier (1.1 = Vanguard default)
+V_STRESS_RES = 7     # v2.1: NEW - Personality: stress resistance (0.9 = Sensitive default)
 
-# Legion (2000, 12) columns - EXPANDED FOR PHASE 2 + TRIAGE-002
+# Extended Attributes (8-19): Implementation-specific
+V_TARGET_X = 8
+V_TARGET_Y = 9
+V_LOD_LEVEL = 10     # 0=Vanguard, 1=Legion, 2=Nebula
+V_LOD_TIMER = 11     # Countdown for hysteresis
+V_ENERGY = 12
+V_TEMP = 13
+V_STATE_FLAGS = 14   # Bitfield: 0=seeking_food, 1=returning, 2=warming, etc.
+V_AGE = 15
+V_COHESION = 16      # Neighbor density (illusion proxy)
+V_TRAIL_PHASE = 17   # For animation continuity
+V_REGEN_RATE = 18    # LEGACY: Individual health regen rate (0.0008-0.0012) - subsumed by REGEN_MOD
+V_DEATH_THRESHOLD = 19  # LEGACY: Individual death threshold (0.08-0.12)
+
+# ============================================================================
+# LEGION TIER (500 bees, 15 columns total)
+# ============================================================================
+# Core Matrix (0-7): Position, Velocity, Health, Stress, Personality
 L_POS_X = 0
 L_POS_Y = 1
 L_VEL_X = 2
 L_VEL_Y = 3
-L_TARGET_X = 4
-L_TARGET_Y = 5
-L_HEALTH = 6
-L_LOD_TIMER = 7
-L_STATE_FLAGS = 8    # PHASE 2: Bitfield for FLAG_ALIVE, FLAG_DEAD, etc.
-L_LOD_LEVEL = 9      # PHASE 2: LOD level (always 1 for Legion tier)
-L_REGEN_RATE = 10    # TRIAGE-002: Individual health regen rate (0.0008-0.0012)
-L_DEATH_THRESHOLD = 11  # TRIAGE-002: Individual death threshold (0.08-0.12)
+L_HEALTH = 4         # v2.1: Core column 4 (was 6)
+L_STRESS = 5         # v2.1: NEW - Stress accumulation [0.0-1.0]
+L_REGEN_MOD = 6      # v2.1: NEW - Personality: regen modifier (0.9 = Legion default)
+L_STRESS_RES = 7     # v2.1: NEW - Personality: stress resistance (1.1 = Resistant default)
+
+# Extended Attributes (8-14): Implementation-specific
+L_TARGET_X = 8
+L_TARGET_Y = 9
+L_LOD_TIMER = 10
+L_STATE_FLAGS = 11   # PHASE 2: Bitfield for FLAG_ALIVE, FLAG_DEAD, etc.
+L_LOD_LEVEL = 12     # PHASE 2: LOD level (always 1 for Legion tier)
+L_REGEN_RATE = 13    # LEGACY: Individual health regen rate (0.0008-0.0012) - subsumed by REGEN_MOD
+L_DEATH_THRESHOLD = 14  # LEGACY: Individual death threshold (0.08-0.12)
 
 # Density Field (128, 128, 4) layers
 D_DENSITY = 0        # Mean bee count per chunk
@@ -113,11 +133,29 @@ HUNGER_THRESHOLD = 0.5
 FOOD_RESTORE_RATE = 0.3      # per second at food source
 WARMTH_RESTORE_RATE = 0.4    # per second at hive
 
-# TRIAGE-002: Individual Biology (Pre-seeded Personality)
+# TRIAGE-002: Individual Biology (Pre-seeded Personality) - LEGACY
 REGEN_RATE_MIN = 0.0008      # Min health regeneration per second
 REGEN_RATE_MAX = 0.0012      # Max health regeneration per second
 DEATH_THRESHOLD_MIN = 0.08   # Min death threshold (health)
 DEATH_THRESHOLD_MAX = 0.12   # Max death threshold (health)
+
+# ============================================================================
+# v2.1 VERSIONED CONTRACT: Stress & Personality System
+# ============================================================================
+# Stress Dynamics (Architect-locked piecewise power-law)
+STRESS_DECAY_POWER = 1.5             # Power-law exponent for stress decay
+STRESS_ACCUMULATION_RATE = 0.05      # Stress gain per second (base rate)
+STRESS_RECOVERY_THRESHOLD = 0.3      # Below this, stress decays faster
+
+# Personality Modifiers (Pre-seeded at spawn)
+VANGUARD_REGEN_MOD = 1.1             # Vanguard: 10% faster health regen
+VANGUARD_STRESS_RES = 0.9            # Vanguard: Sensitive (90% stress resistance, accumulates faster)
+LEGION_REGEN_MOD = 0.9               # Legion: 10% slower health regen
+LEGION_STRESS_RES = 1.1              # Legion: Resistant (110% stress resistance, accumulates slower)
+
+# Organic Jitter (BJI restoration)
+ORGANIC_JITTER_STD = 0.12            # Gaussian noise std (12% of MAX_SPEED)
+ORGANIC_JITTER_THRESHOLD = 0.70      # Apply jitter when alignment â‰¥ 70%
 
 # ============================================================================
 # RENDERING

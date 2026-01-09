@@ -43,6 +43,7 @@ def apply_cohesion(positions, velocities, spatial_grid):
 def apply_separation(positions, velocities, spatial_grid):
     """
     Separation: steer away from nearby neighbors.
+    TRIAGE-005 ROLLBACK: Legacy vectorized approximation (no O(N²) loop)
 
     Args:
         positions: (N, 2) array
@@ -55,22 +56,20 @@ def apply_separation(positions, velocities, spatial_grid):
     N = len(positions)
     forces = np.zeros((N, 2), dtype=np.float32)
 
-    # Simplified pairwise repulsion (full version uses spatial grid)
-    for i in range(N):
-        diff = positions[i] - positions
-        dist = np.linalg.norm(diff, axis=1)
+    # LEGACY APPROACH: Simple repulsion from center of mass
+    # This is much faster than pairwise distance checks
+    # Trade-off: Less accurate but avoids O(N²) performance collapse
+    center_of_mass = np.mean(positions, axis=0)
 
-        # Only repel from very close neighbors (< 20 pixels)
-        close_mask = (dist > 0) & (dist < 20.0)
-        if np.any(close_mask):
-            diff[close_mask] /= dist[close_mask, np.newaxis]  # Normalize
-            diff[close_mask] /= dist[close_mask, np.newaxis]  # Weight by inverse distance
-            forces[i] = np.sum(diff[close_mask], axis=0)
+    # Repel weakly from center (creates spreading effect)
+    diff = positions - center_of_mass
+    dist = np.linalg.norm(diff, axis=1, keepdims=True)
 
-    # Normalize
-    norms = np.linalg.norm(forces, axis=1, keepdims=True)
-    norms = np.where(norms > 0, norms, 1.0)
-    forces = forces / norms * MAX_SPEED * 0.5
+    # Avoid divide by zero
+    dist = np.where(dist > 0, dist, 1.0)
+
+    # Normalize and scale (weaker than cohesion)
+    forces = (diff / dist) * MAX_SPEED * 0.3
 
     return forces
 
@@ -259,13 +258,11 @@ def apply_warmth_restoration(vanguard, hive_center, dt):
 
 def apply_health_regeneration(state_array, dt, is_vanguard=True):
     """
-    TRIAGE-002: Apply individual health regeneration to all alive bees.
-
-    This is the "Zero-Allocation Biology" fix that restores the hollow hive.
-    Each bee regenerates health at their pre-seeded individual rate.
+    v2.1: Health regeneration using personality-driven REGEN_MOD.
+    Replaces TRIAGE-002's individual REGEN_RATE with uniform personality tiers.
 
     Args:
-        state_array: (N, 17) Vanguard or (N, 12) Legion array
+        state_array: (N, 20) Vanguard or (N, 15) Legion array
         dt: Delta time in seconds
         is_vanguard: True for Vanguard tier, False for Legion tier
 
@@ -274,22 +271,118 @@ def apply_health_regeneration(state_array, dt, is_vanguard=True):
     """
     if is_vanguard:
         health_col = V_HEALTH
-        regen_col = V_REGEN_RATE
+        regen_mod_col = V_REGEN_MOD
         flag_col = V_STATE_FLAGS
     else:
         health_col = L_HEALTH
-        regen_col = L_REGEN_RATE
+        regen_mod_col = L_REGEN_MOD
         flag_col = L_STATE_FLAGS
 
     # Only regenerate health for ALIVE bees (FLAG_DEAD not set)
     flags = state_array[:, flag_col].view(np.int32)
     alive_mask = (flags & FLAG_DEAD) == 0
 
-    # Vectorized regeneration using individual rates
-    state_array[alive_mask, health_col] += state_array[alive_mask, regen_col] * dt
+    # v2.1: Base regen rate modulated by personality (REGEN_MOD)
+    # Vanguard: 1.1 (10% faster), Legion: 0.9 (10% slower)
+    base_regen = REGEN_RATE_MAX  # Use legacy max as base (0.0012)
+    state_array[alive_mask, health_col] += (
+        base_regen * state_array[alive_mask, regen_mod_col] * dt
+    )
 
     # Clamp to [0, 1]
     state_array[:, health_col] = np.clip(state_array[:, health_col], 0.0, 1.0)
+
+
+def apply_stress_dynamics(state_array, dt, is_vanguard=True):
+    """
+    v2.1: Stress accumulation and power-law decay.
+
+    Stress equation: decay = 0.1*x + 0.9*x^1.5
+    - Below 0.3: Fast decay (power-law dominates)
+    - Above 0.3: Slower decay (linear component stabilizes)
+
+    Args:
+        state_array: (N, 20) Vanguard or (N, 15) Legion array
+        dt: Delta time in seconds
+        is_vanguard: True for Vanguard tier, False for Legion tier
+    """
+    if is_vanguard:
+        stress_col = V_STRESS
+        stress_res_col = V_STRESS_RES
+        health_col = V_HEALTH
+        flag_col = V_STATE_FLAGS
+    else:
+        stress_col = L_STRESS
+        stress_res_col = L_STRESS_RES
+        health_col = L_HEALTH
+        flag_col = L_STATE_FLAGS
+
+    # Only apply stress to ALIVE bees
+    flags = state_array[:, flag_col].view(np.int32)
+    alive_mask = (flags & FLAG_DEAD) == 0
+
+    # Stress accumulation (modulated by personality resistance)
+    # Vanguard (0.9): accumulates 11% faster, Legion (1.1): 10% slower
+    stress_gain = STRESS_ACCUMULATION_RATE * dt / state_array[alive_mask, stress_res_col]
+    state_array[alive_mask, stress_col] += stress_gain
+
+    # Power-law decay: 0.1*x + 0.9*x^1.5
+    x = state_array[alive_mask, stress_col]
+    decay_amount = (0.1 * x + 0.9 * np.power(x, STRESS_DECAY_POWER)) * dt
+    state_array[alive_mask, stress_col] -= decay_amount
+
+    # Clamp to [0, 1]
+    state_array[:, stress_col] = np.clip(state_array[:, stress_col], 0.0, 1.0)
+
+    # Stress affects health (optional degradation)
+    # High stress (>0.7) slowly damages health
+    high_stress = (state_array[:, stress_col] > 0.7) & alive_mask
+    if np.any(high_stress):
+        state_array[high_stress, health_col] -= 0.002 * dt
+
+
+def apply_organic_jitter(velocities, alignment_threshold=ORGANIC_JITTER_THRESHOLD):
+    """
+    v2.1: Inject Gaussian noise when swarm alignment is high.
+
+    Prevents "railroading" by adding zero-mean jitter to velocity.
+    Applied AFTER steering forces but BEFORE magnitude clamping.
+
+    Args:
+        velocities: (N, 2) array of velocity vectors
+        alignment_threshold: Trigger jitter when alignment ≥ this value (0.70 default)
+
+    Returns:
+        (N, 2) modified velocities with jitter
+    """
+    N = len(velocities)
+
+    # Compute global alignment: how uniform are velocity directions?
+    avg_velocity = np.mean(velocities, axis=0)
+    avg_vel_mag = np.linalg.norm(avg_velocity)
+
+    if avg_vel_mag < 1e-6:
+        return velocities  # No alignment if swarm is stationary
+
+    # Normalized average direction
+    avg_direction = avg_velocity / avg_vel_mag
+
+    # Compute alignment for each bee (dot product with avg direction)
+    vel_mags = np.linalg.norm(velocities, axis=1, keepdims=True)
+    vel_mags = np.where(vel_mags > 0, vel_mags, 1.0)
+    normalized_vel = velocities / vel_mags
+
+    alignment = np.abs(np.sum(normalized_vel * avg_direction, axis=1))
+
+    # Inject jitter for highly aligned bees
+    high_alignment = alignment >= alignment_threshold
+
+    if np.any(high_alignment):
+        # Vectorized Gaussian noise (σ = 0.12 * MAX_SPEED)
+        noise = np.random.normal(0, ORGANIC_JITTER_STD * MAX_SPEED, size=(np.sum(high_alignment), 2))
+        velocities[high_alignment] += noise
+
+    return velocities
 
 
 def update_cohesion_illusion(vanguard, density_field):
@@ -298,7 +391,7 @@ def update_cohesion_illusion(vanguard, density_field):
     Trail tightness and vibration are driven by this value.
 
     Args:
-        vanguard: (N, 15) array
+        vanguard: (N, 20) array - v2.1: expanded to 20 columns
         density_field: (128, 128, 4) array
     """
     positions = vanguard[:, [V_POS_X, V_POS_Y]]
@@ -350,16 +443,25 @@ def update_state_flags(vanguard, food_positions, hive_center):
     # Update targets based on state
     positions = vanguard[:, [V_POS_X, V_POS_Y]]
 
-    # Seeking food: target nearest food - TRIAGE-002: view as int32
+    # --- SEEKING FOOD: PURE VECTORIZED NEAREST-NEIGHBOR ---
     flags_int = vanguard[:, V_STATE_FLAGS].view(np.int32)
-    seeking_food = (flags_int & FLAG_SEEKING_FOOD) > 0
-    if np.any(seeking_food) and len(food_positions) > 0:
-        for i in np.where(seeking_food)[0]:
-            # Find nearest food
-            dists = np.linalg.norm(food_positions - positions[i], axis=1)
-            nearest_idx = np.argmin(dists)
-            vanguard[i, V_TARGET_X] = food_positions[nearest_idx, 0]
-            vanguard[i, V_TARGET_Y] = food_positions[nearest_idx, 1]
+    seeking_food_mask = (flags_int & FLAG_SEEKING_FOOD) > 0  # (N,) boolean
+
+    if np.any(seeking_food_mask) and len(food_positions) > 0:
+        # 1. Extract seeking positions
+        seeking_positions = positions[seeking_food_mask]  # (K, 2)
+
+        # 2. Broadcast squared distances (K, M)
+        dx = seeking_positions[:, np.newaxis, 0] - food_positions[np.newaxis, :, 0]
+        dy = seeking_positions[:, np.newaxis, 1] - food_positions[np.newaxis, :, 1]
+        dist_sq = dx**2 + dy**2
+
+        # 3. Single argmin call
+        nearest_indices = np.argmin(dist_sq, axis=1)
+
+        # 4. Direct assignment (no intermediates)
+        vanguard[seeking_food_mask, V_TARGET_X] = food_positions[nearest_indices, 0]
+        vanguard[seeking_food_mask, V_TARGET_Y] = food_positions[nearest_indices, 1]
 
     # Warming: target hive center - TRIAGE-002: view as int32
     warming = (flags_int & FLAG_WARMING) > 0

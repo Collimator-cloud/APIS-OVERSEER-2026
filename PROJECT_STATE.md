@@ -1,8 +1,8 @@
-> **WAKE-UP:** PHASE_7_AI_TEAM_OPTIMIZATION | 2026-01-08 | 2026-01-08-Phase7-Experiments | RECONSTRUCTION: <30s
+> **WAKE-UP:** PHASE_7_AI_TEAM_OPTIMIZATION | 2026-01-09 | 2026-01-08-Phase7-Experiments | RECONSTRUCTION: <30s
 
 # 🧠 APIS-OVERSEER PROJECT STATE
 
-**Last Updated:** 2026-01-08
+**Last Updated:** 2026-01-09
 **Current Phase:** Phase 7 - AI Team Optimization Experiments
 **Status:** Supervisor-Worker pattern ACTIVE, baseline metrics collection in progress
 **Performance Budget:** ≤8ms frame time, +5MB memory limit, ≤1.0ms debug overhead
@@ -72,6 +72,7 @@
 | 003 | 2026-01-07 | BUILD | IMPL | Phase 6: GPU debug visuals (ModernGL distortion, stress halos, vignette, auto-throttle at 14ms). | YES |
 | 004 | 2026-01-07 | BUILD | PERF | TRIAGE-004: Vectorized flower interaction (broadcasting), preserved harvest noise, 2Hz RAM monitoring. | YES |
 | 005 | 2026-01-08 | ARCH | GOV | Phase 7 launch: versioned contracts, metrics framework, Supervisor-Worker experiment design. | YES |
+| 006 | 2026-01-09 | ARCH | GOV | Roles updated: Perplexity=Librarian, Grok=Advisory, Tooling boundaries defined. | YES |
 
 **Chronicle Rules:**
 - **WHY Field:** Hard cap at 140 characters (enforced by Claude Code validation)
@@ -147,9 +148,9 @@ python -m py_compile simulation.py
 |------|-------|------------------|--------------|
 | **Lead Architect** | Gemini 2.5 Pro | System design, invariant locks, phase planning | Architectural review |
 | **Builder** | Claude Sonnet 4.5 | Implementation, testing, documentation | Primary worker (Supervisor-Worker) |
-| **Integration Surgeon** | Grok | Cross-system integration, realism validation | Context archivist (48hr trial) |
+| **Integration Surgeon** | Grok | Cross-system integration, realism validation | Realism audits & Advisory |
 | **Performance Guru** | DeepSeek | Optimization, profiling, budget enforcement | **Process analyst & metric designer** |
-| **Librarian** | The Brain | UX design, information architecture | Documentation support |
+| **Librarian** | Perplexity | Case studies, institutional memory, archives | Documentation & Intake |
 | **Supervisor** | Human (Merchant) | Final approval, priority decisions | **Active supervisor (Experiment 1)** |
 
 ---
