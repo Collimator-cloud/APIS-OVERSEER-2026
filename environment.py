@@ -30,6 +30,18 @@ class Environment:
         # Spatial grid (initialized empty, rebuilt each frame)
         self.spatial_grid = None
 
+        # Tree hollow entrance assets (loaded lazily)
+        self._tree_hollow_loaded = False
+        self._bark_texture = None
+        self._hollow_mask = None
+        self._glow_surface = None
+        self._glow_cache = {}  # HOTFIX: Pre-modulated glow surfaces by opacity level (64 levels)
+        self._glow_timer = 0.0  # For flicker animation
+        
+        # HOTFIX: Pre-compute sin values for flicker (avoid math.sin in hot path)
+        import math
+        self._sin_lookup = [math.sin(i * 0.5) for i in range(1000)]
+
     def _generate_food_sources(self, num_sources=5):
         """
         Generate random food source positions.
@@ -88,19 +100,63 @@ class Environment:
 
         return self.collision_mask[mask_y, mask_x]
 
-    def render_hive(self, screen, camera_x, camera_y, screen_width, screen_height):
+    def render_hive(self, screen, camera_x, camera_y, screen_width, screen_height, coherence=0.0, dt=0.016):
         """
-        Render hive structure.
+        Render hive structure with tree hollow entrance.
 
         Args:
             screen: Pygame surface
             camera_x, camera_y: Camera position
             screen_width, screen_height: Screen dimensions
+            coherence: Swarm coherence index [0, 1] for glow flicker
+            dt: Delta time for flicker animation
         """
         # Transform to screen space
         screen_x = self.hive_center[0] - camera_x + screen_width / 2
         screen_y = self.hive_center[1] - camera_y + screen_height / 2
 
+        # Load tree hollow assets if needed
+        if not self._tree_hollow_loaded:
+            self._load_tree_hollow_assets()
+
+        # Update glow flicker timer
+        self._glow_timer += dt
+
+        # HOTFIX: Batch all tree hollow layers in ONE scissor block (minimize OpenGL state changes)
+        if self._bark_texture and self._hollow_mask and self._glow_surface:
+            # Single scissor test for all layers
+            scissor_width = int(screen_width * 0.25)
+            clip_rect = pygame.Rect(0, 0, scissor_width, screen_height)
+            original_clip = screen.get_clip()
+            screen.set_clip(clip_rect)
+            
+            # Layer 1: Bark (background)
+            bark_rect = self._bark_texture.get_rect(center=(int(screen_x), int(screen_y)))
+            screen.blit(self._bark_texture, bark_rect)
+            
+            # Layer 2: Hollow mask (dark interior)
+            hollow_rect = self._hollow_mask.get_rect(center=(int(screen_x), int(screen_y)))
+            screen.blit(self._hollow_mask, hollow_rect, special_flags=pygame.BLEND_RGBA_MULT)
+            
+            # Layer 3: Glow (use pre-cached modulated surface)
+            # Flicker: opacity = 0.25 + 0.05*sin(time*0.5)*coherence
+            time_idx = int(self._glow_timer) % 1000
+            flicker = self._sin_lookup[time_idx] * 0.05 * coherence
+            opacity = max(0.0, min(1.0, 0.25 + flicker))
+            
+            # Get cached glow surface (or create if new opacity level)
+            opacity_key = int(opacity * 63)  # 64 levels (0-63)
+            if opacity_key not in self._glow_cache:
+                glow_cached = self._glow_surface.copy()
+                glow_cached.set_alpha(int(opacity_key * 4))  # Map to 0-252
+                self._glow_cache[opacity_key] = glow_cached
+            
+            glow_rect = self._glow_cache[opacity_key].get_rect(center=(int(screen_x), int(screen_y)))
+            screen.blit(self._glow_cache[opacity_key], glow_rect)
+            
+            screen.set_clip(original_clip)
+
+        # Fallback: Original hive rendering (always visible, provides compatibility)
         # Draw hive entrance (dark circle)
         pygame.draw.circle(
             screen,
@@ -127,6 +183,37 @@ class Environment:
             int(HIVE_ENTRANCE_RADIUS * 0.6),
             0
         )
+
+    def _load_tree_hollow_assets(self):
+        """Load tree hollow PNG assets with GPU fallback compatibility."""
+        import os
+
+        asset_path = 'assets/environment/tree_hollow/'
+        
+        try:
+            if os.path.exists(asset_path + 'bark_texture.png'):
+                self._bark_texture = pygame.image.load(asset_path + 'bark_texture.png')
+                self._bark_texture = pygame.transform.smoothscale(self._bark_texture, (512, 512))
+                self._bark_texture = self._bark_texture.convert_alpha()
+            
+            if os.path.exists(asset_path + 'hollow_mask.png'):
+                self._hollow_mask = pygame.image.load(asset_path + 'hollow_mask.png')
+                self._hollow_mask = pygame.transform.smoothscale(self._hollow_mask, (512, 512))
+                self._hollow_mask = self._hollow_mask.convert_alpha()
+            
+            if os.path.exists(asset_path + 'glow_surface.png'):
+                # HOTFIX: Reduce glow to 256×256 (4× memory reduction, faster blit)
+                glow_raw = pygame.image.load(asset_path + 'glow_surface.png')
+                self._glow_surface = pygame.transform.smoothscale(glow_raw, (256, 256))
+                self._glow_surface = self._glow_surface.convert_alpha()
+                print(f"   📊 Glow texture downsampled to 256×256 for performance")
+            
+            self._tree_hollow_loaded = True
+            print(f"✅ Tree hollow assets loaded from {asset_path}")
+        except Exception as e:
+            print(f"⚠️  Tree hollow asset loading failed: {e}")
+            print("   Falling back to original hive rendering")
+            self._tree_hollow_loaded = True  # Mark as attempted to avoid retry loop
 
     def render_food_sources(self, screen, camera_x, camera_y, screen_width, screen_height):
         """
