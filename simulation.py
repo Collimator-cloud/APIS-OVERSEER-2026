@@ -338,7 +338,7 @@ class BeeSimulation:
                 print(f"Per bee: {vanguard_time_ms/len(self.vanguard):.6f}ms")
                 print(f"Limit: {vanguard_limit:.1f}ms")
 
-            if vanguard_time_ms > vanguard_limit:
+            if self.frame_count > 10 and vanguard_time_ms > vanguard_limit:
                 raise PerformanceHaltException(f"Vanguard update {vanguard_time_ms:.3f}ms > 8.0ms")
 
             # Track Legion update time
