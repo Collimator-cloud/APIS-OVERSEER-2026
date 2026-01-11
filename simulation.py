@@ -1390,14 +1390,16 @@ def main():
         # Render
         render_start = time.perf_counter()
 
-        # PHASE 14.0-REVISED: Forest floor now rendered via render_frame (no screen.fill)
-        # screen.fill((20, 20, 30))  # ← REMOVED: replaced by forest_floor blit
+        # PHASE 14.0-REVISED: RENDER ORDER FIX - Forest floor → Environment → Bees
+        # 1. Forest floor (background)
+        if 'forest_floor' in render_data:
+            screen.blit(render_data['forest_floor'], (0, 0))
 
-        # Draw environment (hive + food) first
+        # 2. Environment (hive + food on top of floor)
         environment.render_hive(screen, camera.x, camera.y, screen_width, screen_height)
         environment.render_food_sources(screen, camera.x, camera.y, screen_width, screen_height)
 
-        # Draw bees on top (renderer blits forest floor first)
+        # 3. Bees (foreground)
         # PHASE 4: Pass pheromone visualization parameters
         renderer.render_frame(screen, render_data, camera.x, camera.y, show_pheromone, pheromone_opacity)
 

@@ -73,9 +73,16 @@ def main():
         simulation.update(1.0 / 60.0)
         render_data = simulation.get_render_data()
 
-        # Render (forest floor now blits automatically via render_frame)
+        # RENDER ORDER FIX: Forest floor → Environment → Bees
+        # 1. Forest floor (background)
+        if 'forest_floor' in render_data:
+            screen.blit(render_data['forest_floor'], (0, 0))
+
+        # 2. Environment (hive + food on top of floor)
         environment.render_hive(screen, camera.x, camera.y, 1280, 720)
         environment.render_food_sources(screen, camera.x, camera.y, 1280, 720)
+
+        # 3. Bees (foreground) - render_frame now skips forest floor blit
         renderer.render_frame(screen, render_data, camera.x, camera.y, False, 0.0)
 
         # FORTRESS WIDE-SHOT: Capture at frame 60 (zoomed out for full meadow view)
@@ -84,7 +91,9 @@ def main():
             temp_camera = Camera(HIVE_CENTER_X, HIVE_CENTER_Y - 300)
             temp_render_data = simulation.get_render_data()
 
-            # Clear and re-render with wide view
+            # RENDER ORDER FIX: Forest floor → Environment → Bees
+            if 'forest_floor' in temp_render_data:
+                screen.blit(temp_render_data['forest_floor'], (0, 0))
             environment.render_hive(screen, temp_camera.x, temp_camera.y, 1280, 720)
             environment.render_food_sources(screen, temp_camera.x, temp_camera.y, 1280, 720)
             renderer.render_frame(screen, temp_render_data, temp_camera.x, temp_camera.y, False, 0.0)

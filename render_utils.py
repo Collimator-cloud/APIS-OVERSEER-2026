@@ -112,9 +112,8 @@ class BeeRenderer:
             show_pheromone: Toggle pheromone heatmap overlay
             pheromone_opacity: Opacity for pheromone heatmap (0.0-0.4)
         """
-        # PHASE 14.0-REVISED: Render forest floor (replaces void-black screen.fill)
-        if 'forest_floor' in render_data:
-            screen.blit(render_data['forest_floor'], (0, 0))
+        # PHASE 14.0-REVISED: Forest floor now blitted by caller before this method
+        # (Render order: floor → environment → render_frame)
 
         # PHASE 12.0: Render dual-channel ghost-field (if enabled)
         if show_pheromone:
