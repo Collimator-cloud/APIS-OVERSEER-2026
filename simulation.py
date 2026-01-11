@@ -228,6 +228,11 @@ class BeeSimulation:
         self.swarm_coherence_index = 0.0  # 0-1 scale
 
         # ====================================================================
+        # PHASE 14.0-REVISED: FOREST FLOOR (The Ecological Anchor)
+        # ====================================================================
+        self.forest_floor = self._create_forest_floor()
+
+        # ====================================================================
         # CAMERA (for LOD system)
         # ====================================================================
         self.camera_x = HIVE_CENTER_X
@@ -238,6 +243,51 @@ class BeeSimulation:
         # ====================================================================
         self.popping_count = 0
         self.last_popping_reset = 0.0
+
+    def _create_forest_floor(self):
+        """
+        PHASE 14.0-REVISED: Generate persistent Forest Floor grit texture.
+
+        Creates a dark, organic background with scattered grit pixels to replace
+        the void-black screen.fill. This anchors the ecological reality of the meadow.
+
+        Returns:
+            pygame.Surface: 1280x720 forest floor texture
+        """
+        # Create base dark green-brown surface
+        floor_surface = pygame.Surface((1280, 720))
+        floor_surface.fill((10, 15, 8))  # Deep forest floor base
+
+        # Generate 2,000 random grit pixels (earth tones)
+        grit_count = 2000
+        grit_colors = [
+            (15, 25, 10),   # Deep hunter green
+            (20, 18, 12),   # Dark earth brown
+            (12, 20, 8),    # Moss green
+            (18, 15, 10),   # Soil brown
+            (8, 12, 6),     # Shadow green
+        ]
+
+        # Use PixelArray for batch pixel-setting
+        try:
+            pxarray = pygame.PixelArray(floor_surface)
+
+            # Random grit positions
+            grit_x = np.random.randint(0, 1280, grit_count)
+            grit_y = np.random.randint(0, 720, grit_count)
+
+            # Random color selection
+            for i in range(grit_count):
+                color_rgb = grit_colors[np.random.randint(0, len(grit_colors))]
+                mapped_color = floor_surface.map_rgb(color_rgb)
+                pxarray[grit_x[i], grit_y[i]] = mapped_color
+
+            del pxarray  # Unlock surface
+        except:
+            pass  # Fallback: skip grit if PixelArray fails
+
+        print(f"[FOREST] Floor texture generated (1280x720, {grit_count} grit pixels)")
+        return floor_surface
 
     def _init_vanguard(self):
         """
@@ -1125,6 +1175,7 @@ class BeeSimulation:
         PHASE 4: Added flowers and pheromone heatmap.
         PHASE 12.0: Added dual-channel pheromone grids (resource + exploration).
         PHASE 13.0: Added ghost_bees (4800 single-pixel LOD agents).
+        PHASE 14.0-REVISED: Added forest_floor (persistent ecological background).
         V6.0: Added coherence index.
         """
         return {
@@ -1137,7 +1188,8 @@ class BeeSimulation:
             'pheromone_heatmap': self.pheromone_system.get_heatmap(),  # Legacy fallback
             'resource_grid': self.pheromone_system.resource_grid,       # PHASE 12.0: Forager trails
             'exploration_grid': self.pheromone_system.exploration_grid, # PHASE 12.0: Scout markers
-            'coherence_index': self.swarm_coherence_index
+            'coherence_index': self.swarm_coherence_index,
+            'forest_floor': self.forest_floor                           # PHASE 14.0-REVISED: Ecological anchor
         }
 
 
@@ -1338,14 +1390,14 @@ def main():
         # Render
         render_start = time.perf_counter()
 
-        # Clear screen first (done in renderer)
-        screen.fill((20, 20, 30))
+        # PHASE 14.0-REVISED: Forest floor now rendered via render_frame (no screen.fill)
+        # screen.fill((20, 20, 30))  # ← REMOVED: replaced by forest_floor blit
 
         # Draw environment (hive + food) first
         environment.render_hive(screen, camera.x, camera.y, screen_width, screen_height)
         environment.render_food_sources(screen, camera.x, camera.y, screen_width, screen_height)
 
-        # Draw bees on top (renderer doesn't clear screen now)
+        # Draw bees on top (renderer blits forest floor first)
         # PHASE 4: Pass pheromone visualization parameters
         renderer.render_frame(screen, render_data, camera.x, camera.y, show_pheromone, pheromone_opacity)
 

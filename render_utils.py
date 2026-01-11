@@ -103,6 +103,7 @@ class BeeRenderer:
         """
         Render complete frame with all tiers.
         PHASE 4: Added pheromone heatmap and flower rendering.
+        PHASE 14.0-REVISED: Added forest floor ecological background.
 
         Args:
             screen: Pygame surface
@@ -111,6 +112,10 @@ class BeeRenderer:
             show_pheromone: Toggle pheromone heatmap overlay
             pheromone_opacity: Opacity for pheromone heatmap (0.0-0.4)
         """
+        # PHASE 14.0-REVISED: Render forest floor (replaces void-black screen.fill)
+        if 'forest_floor' in render_data:
+            screen.blit(render_data['forest_floor'], (0, 0))
+
         # PHASE 12.0: Render dual-channel ghost-field (if enabled)
         if show_pheromone:
             if 'resource_grid' in render_data and 'exploration_grid' in render_data:

@@ -217,13 +217,24 @@ class Environment:
 
     def render_food_sources(self, screen, camera_x, camera_y, screen_width, screen_height):
         """
-        Render food sources.
+        PHASE 14.0-REVISED: Render food sources as vibrant Meadow Clusters.
+
+        Replaces large green orbs with small filled circles (radius 8px) using
+        primary colors (Yellow/Red/Purple) to create organic meadow texture.
 
         Args:
             screen: Pygame surface
             camera_x, camera_y: Camera position
             screen_width, screen_height: Screen dimensions
         """
+        # Meadow patch colors (vibrant primaries)
+        meadow_colors = [
+            (255, 255, 50),   # Bright Yellow (pollen)
+            (255, 80, 80),    # Warm Red (berries)
+            (200, 100, 255),  # Purple (flowers)
+            (255, 200, 60),   # Gold (nectar)
+        ]
+
         for food in self.food_sources:
             screen_x = food[0] - camera_x + screen_width / 2
             screen_y = food[1] - camera_y + screen_height / 2
@@ -232,32 +243,14 @@ class Environment:
             if not (0 <= screen_x < screen_width and 0 <= screen_y < screen_height):
                 continue
 
-            # Draw food source (bright green circle with glow)
-            # Outer glow
+            # PHASE 14.0-REVISED: Meadow Cluster (small filled circle, random color)
+            color = meadow_colors[np.random.randint(0, len(meadow_colors))]
             pygame.draw.circle(
                 screen,
-                (100, 200, 100, 128),
+                color,
                 (int(screen_x), int(screen_y)),
-                25,
-                0
-            )
-
-            # Inner food
-            pygame.draw.circle(
-                screen,
-                (150, 255, 150),
-                (int(screen_x), int(screen_y)),
-                15,
-                0
-            )
-
-            # Core
-            pygame.draw.circle(
-                screen,
-                (200, 255, 200),
-                (int(screen_x), int(screen_y)),
-                8,
-                0
+                8,  # 8px radius
+                0   # Filled
             )
 
     def render_collision_mask_debug(self, screen, camera_x, camera_y, screen_width, screen_height):

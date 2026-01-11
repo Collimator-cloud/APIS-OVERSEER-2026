@@ -17,8 +17,8 @@ MAX_LEGION = 1100       # Mid-detail bees (Phase 9.3: scaled from 900 → 1100)
 FIELD_RES = 128         # Density field resolution (128x128 chunks)
 NEBULA_PARTICLES_PER_CHUNK = 0.6  # ~4,900 ephemeral particles (TEMP: was 1.4 → ~22,700)
 
-# PHASE 13.0: Ghost-Bee Bridge (The 6K Dawn)
-MAX_GHOST_BEES = 4800   # Single-pixel LOD agents (no steering, no pheromones)
+# PHASE 14.0-REVISED: Fortress Meadow (Ecological Pivot)
+MAX_GHOST_BEES = 1800   # Reduced from 4800 to reclaim performance for environmental depth
 GHOST_BEE_ALPHA = 0.25  # Fixed alpha for ghost rendering (faint presence)
 GHOST_BEE_JITTER = 0.1  # Brownian jitter magnitude (pixels/frame)
 
