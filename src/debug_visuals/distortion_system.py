@@ -27,6 +27,14 @@ except ImportError:
     MODERNGL_AVAILABLE = False
     moderngl = None
 
+# ============================================================================
+# TASK 8.2: SURGICAL TIMELINE INSTRUMENTATION (Phase 8 Latency Trap Test)
+# ============================================================================
+# Module-level buffer for 10-frame GPU timing capture
+# Buffered output prevents console I/O from contaminating millisecond measurements
+_surgical_timeline_buffer = []
+_grace_frames_remaining = 10  # Grace window: suppress throttle for first 10 frames
+
 
 # TRIAGE-005 EMERGENCY: Simplified shader (35ms → 0.3ms)
 # Replace expensive per-pixel Perlin with pre-computed noise texture
@@ -182,24 +190,34 @@ class DistortionSystem:
             print(f"[DISTORTION] GPU init failed: {e}")
             self.enabled = False
 
-    def apply_distortion(self, screen_surface, pheromone_field):
+    def apply_distortion(self, screen_surface, pheromone_field, frame_count=0):
         """
         Apply pheromone-driven distortion to the screen.
 
         Args:
             screen_surface: Pygame Surface to distort
             pheromone_field: (128, 128, 3) numpy array of pheromone RGB intensities
+            frame_count: Current frame number (for Task 8.2 timeline correlation)
 
         Returns:
             pygame.Surface: Distorted surface (or original if GPU unavailable)
         """
+        global _surgical_timeline_buffer, _grace_frames_remaining
+
         if not self.enabled or self.ctx is None:
             return screen_surface
 
         import time
-        gpu_start = time.perf_counter()
+
+        # TASK 8.2: Initialize timeline entry
+        timeline_entry = {'frame': frame_count}
 
         try:
+            # ================================================================
+            # STAGE 1: UPLOAD (CPU → GPU)
+            # ================================================================
+            t0 = time.perf_counter()
+
             # Convert Pygame Surface to bytes (RGBA)
             surface_bytes = pygame.image.tostring(screen_surface, 'RGBA', True)
             self.texture.write(surface_bytes)
@@ -207,6 +225,13 @@ class DistortionSystem:
             # Upload pheromone field to GPU (normalize to 0-1 range)
             pheromone_rgb = (pheromone_field * 255).astype(np.uint8)
             self.pheromone_texture.write(pheromone_rgb.tobytes())
+
+            timeline_entry['upload_ms'] = (time.perf_counter() - t0) * 1000.0
+
+            # ================================================================
+            # STAGE 2: DISPATCH (Shader Execution)
+            # ================================================================
+            t1 = time.perf_counter()
 
             # Bind textures (TRIAGE-005: Now includes noise texture)
             self.texture.use(location=0)
@@ -224,6 +249,13 @@ class DistortionSystem:
             self.ctx.clear(0.0, 0.0, 0.0, 1.0)
             self.vao.render(mode=moderngl.TRIANGLE_STRIP)
 
+            timeline_entry['dispatch_ms'] = (time.perf_counter() - t1) * 1000.0
+
+            # ================================================================
+            # STAGE 3: DOWNLOAD (GPU → CPU)
+            # ================================================================
+            t2 = time.perf_counter()
+
             # Read back to Pygame Surface
             distorted_bytes = self.fbo.read(components=4)
             distorted_surface = pygame.image.fromstring(
@@ -233,15 +265,40 @@ class DistortionSystem:
                 True  # Flip vertically (OpenGL vs Pygame coordinate system)
             )
 
-            # Record GPU time
-            gpu_time_ms = (time.perf_counter() - gpu_start) * 1000.0
+            timeline_entry['download_ms'] = (time.perf_counter() - t2) * 1000.0
+
+            # ================================================================
+            # STAGE 4: SYNC (Driver overhead - implicit in total)
+            # ================================================================
+            # ModernGL operations are synchronous, so sync is embedded in stages above
+            # Calculate sync as residual from total minus explicit stages
+            total_measured = timeline_entry['upload_ms'] + timeline_entry['dispatch_ms'] + timeline_entry['download_ms']
+            t3 = time.perf_counter()
+            # Explicit sync point (finish any pending operations)
+            self.ctx.finish()
+            timeline_entry['sync_ms'] = (time.perf_counter() - t3) * 1000.0
+
+            # Total GPU time
+            gpu_time_ms = total_measured + timeline_entry['sync_ms']
+            timeline_entry['total_ms'] = gpu_time_ms
+
+            # Buffer timeline (no console output yet)
+            _surgical_timeline_buffer.append(timeline_entry)
+
+            # Record to performance monitor
             self.perf_monitor.record_gpu_time(gpu_time_ms)
 
-            # TRIAGE-005 EMERGENCY: Kill switch if GPU exceeds 1.0ms
+            # ================================================================
+            # TASK 8.2: GRACE WINDOW (Suppress 1.0ms throttle for 10 frames)
+            # ================================================================
             if gpu_time_ms > 1.0:
-                print(f"[DISTORTION] EMERGENCY DISABLE: GPU time {gpu_time_ms:.1f}ms > 1.0ms")
-                self.enabled = False
-                return screen_surface
+                if _grace_frames_remaining > 0:
+                    _grace_frames_remaining -= 1
+                    print(f"[TASK 8.2] Grace frame {10 - _grace_frames_remaining}/10: GPU {gpu_time_ms:.2f}ms (throttle suppressed)")
+                else:
+                    print(f"[DISTORTION] EMERGENCY DISABLE: GPU time {gpu_time_ms:.1f}ms > 1.0ms (grace expired)")
+                    self.enabled = False
+                    return screen_surface
 
             return distorted_surface
 

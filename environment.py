@@ -206,12 +206,12 @@ class Environment:
                 glow_raw = pygame.image.load(asset_path + 'glow_surface.png')
                 self._glow_surface = pygame.transform.smoothscale(glow_raw, (256, 256))
                 self._glow_surface = self._glow_surface.convert_alpha()
-                print(f"   📊 Glow texture downsampled to 256×256 for performance")
-            
+                print(f"   [INFO] Glow texture downsampled to 256x256 for performance")
+
             self._tree_hollow_loaded = True
-            print(f"✅ Tree hollow assets loaded from {asset_path}")
+            print(f"[OK] Tree hollow assets loaded from {asset_path}")
         except Exception as e:
-            print(f"⚠️  Tree hollow asset loading failed: {e}")
+            print(f"[WARN] Tree hollow asset loading failed: {e}")
             print("   Falling back to original hive rendering")
             self._tree_hollow_loaded = True  # Mark as attempted to avoid retry loop
 

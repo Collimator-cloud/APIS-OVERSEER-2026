@@ -261,7 +261,36 @@ class BeeSimulation:
         self.vanguard[:, V_LOD_TIMER] = 0.0
         self.vanguard[:, V_ENERGY] = 1.0
         self.vanguard[:, V_TEMP] = 1.0
-        self.vanguard[:, V_STATE_FLAGS] = FLAG_SEEKING_FOOD
+
+        # PHASE 10: Caste assignment (v11.0 - Trinity of Roles)
+        # Distribution: 10% Scout, 60% Forager, 30% Nurse
+        # Use shuffled indices for random distribution
+        indices = np.arange(MAX_VANGUARD)
+        np.random.shuffle(indices)
+
+        scout_count = int(MAX_VANGUARD * 0.10)
+        forager_count = int(MAX_VANGUARD * 0.60)
+        # Remaining are nurses (ensures exactly 100% allocation)
+
+        # Initialize state flags with base behavior (as integers for bitwise ops)
+        flags = np.full(MAX_VANGUARD, FLAG_SEEKING_FOOD, dtype=np.int32)
+
+        # Assign caste bits (bits 5-6 of STATE_FLAGS)
+        # Scouts (first 10%)
+        scout_indices = indices[:scout_count]
+        flags[scout_indices] |= (CASTE_SCOUT << CASTE_BITS_OFFSET)
+
+        # Foragers (next 60%)
+        forager_indices = indices[scout_count:scout_count + forager_count]
+        flags[forager_indices] |= (CASTE_FORAGER << CASTE_BITS_OFFSET)
+
+        # Nurses (remaining 30%)
+        nurse_indices = indices[scout_count + forager_count:]
+        flags[nurse_indices] |= (CASTE_NURSE << CASTE_BITS_OFFSET)
+
+        # Store as float (numpy array is float64)
+        self.vanguard[:, V_STATE_FLAGS] = flags.astype(np.float64)
+
         self.vanguard[:, V_AGE] = 0.0
         self.vanguard[:, V_COHESION] = 0.5
         self.vanguard[:, V_TRAIL_PHASE] = np.random.uniform(0, 2 * np.pi, MAX_VANGUARD)
@@ -294,7 +323,31 @@ class BeeSimulation:
         self.legion[:, L_TARGET_X] = np.random.uniform(100, WORLD_WIDTH - 100, MAX_LEGION)
         self.legion[:, L_TARGET_Y] = np.random.uniform(100, WORLD_HEIGHT - 100, MAX_LEGION)
         self.legion[:, L_LOD_TIMER] = 0.0
-        self.legion[:, L_STATE_FLAGS] = FLAG_SEEKING_FOOD  # All Legion start ALIVE and seeking food
+
+        # PHASE 10: Caste assignment (v11.0 - Trinity of Roles)
+        # Distribution: 10% Scout, 60% Forager, 30% Nurse
+        indices = np.arange(MAX_LEGION)
+        np.random.shuffle(indices)
+
+        scout_count = int(MAX_LEGION * 0.10)
+        forager_count = int(MAX_LEGION * 0.60)
+
+        # Initialize state flags with base behavior (as integers for bitwise ops)
+        flags = np.full(MAX_LEGION, FLAG_SEEKING_FOOD, dtype=np.int32)
+
+        # Assign caste bits (bits 5-6 of STATE_FLAGS)
+        scout_indices = indices[:scout_count]
+        flags[scout_indices] |= (CASTE_SCOUT << CASTE_BITS_OFFSET)
+
+        forager_indices = indices[scout_count:scout_count + forager_count]
+        flags[forager_indices] |= (CASTE_FORAGER << CASTE_BITS_OFFSET)
+
+        nurse_indices = indices[scout_count + forager_count:]
+        flags[nurse_indices] |= (CASTE_NURSE << CASTE_BITS_OFFSET)
+
+        # Store as float (numpy array is float64)
+        self.legion[:, L_STATE_FLAGS] = flags.astype(np.float64)
+
         self.legion[:, L_LOD_LEVEL] = 1  # Legion is LOD tier 1 (between Vanguard=0 and Nebula=2)
 
         # LEGACY: TRIAGE-002 biology (preserved for compatibility)
@@ -442,9 +495,13 @@ class BeeSimulation:
         alignment_force = apply_alignment(positions, velocities, empty_grid)
         seek_force = apply_seek(positions, velocities, targets)
 
-        # Combine forces (cohesion dominates by 2×)
+        # PHASE 10: Caste-specific cohesion multipliers (branchless)
+        caste_ids_cohesion = (self.vanguard[:, V_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
+        cohesion_mults = np.choose(caste_ids_cohesion, [1.0, 1.0, NURSE_COHESION_MULT])  # Only nurses get 2.0×
+
+        # Combine forces (cohesion dominates by 2×, nurses get extra 2× for 4× total)
         total_force = (
-            cohesion_force * COHESION_FORCE * COHESION_DOMINANCE_RATIO +
+            cohesion_force * COHESION_FORCE * COHESION_DOMINANCE_RATIO * cohesion_mults[:, np.newaxis] +
             separation_force * SEPARATION_FORCE +
             alignment_force * ALIGNMENT_FORCE +
             seek_force * SEEK_FORCE
@@ -457,23 +514,56 @@ class BeeSimulation:
         # ====================================================================
         # v2.1 PHASE 2: ORGANIC JITTER (BJI Restoration)
         # ====================================================================
+        # PHASE 10: Caste-specific jitter multipliers (branchless)
+        caste_ids_jitter = (self.vanguard[:, V_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
+        jitter_mults = np.choose(caste_ids_jitter, [SCOUT_JITTER_MULT, FORAGER_JITTER_MULT, NURSE_JITTER_MULT])
+
         # Apply zero-mean Gaussian noise when alignment ≥ 70%
         self.vanguard[:, [V_VEL_X, V_VEL_Y]] = apply_organic_jitter(
-            self.vanguard[:, [V_VEL_X, V_VEL_Y]]
+            self.vanguard[:, [V_VEL_X, V_VEL_Y]],
+            jitter_mults=jitter_mults
         )
 
         # ====================================================================
         # v2.1 PHASE 3: MAGNITUDE CLAMP (RED LINE: Velocity magnitude lock)
         # ====================================================================
+        # PHASE 10: Caste-specific speed limits (branchless scalar biasing)
+        # Extract caste IDs from STATE_FLAGS (bits 5-6)
+        caste_ids = (self.vanguard[:, V_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
+
+        # Build speed multiplier array (branchless using np.choose)
+        speed_mults = np.choose(caste_ids, [SCOUT_SPEED_MULT, FORAGER_SPEED_MULT, NURSE_SPEED_MULT])
+        max_speeds = MAX_SPEED * speed_mults
+
         speeds = np.linalg.norm(self.vanguard[:, [V_VEL_X, V_VEL_Y]], axis=1)
-        speed_mask = speeds > MAX_SPEED
-        self.vanguard[speed_mask, V_VEL_X] *= MAX_SPEED / speeds[speed_mask]
-        self.vanguard[speed_mask, V_VEL_Y] *= MAX_SPEED / speeds[speed_mask]
+        speed_mask = speeds > max_speeds
+        self.vanguard[speed_mask, V_VEL_X] *= max_speeds[speed_mask] / speeds[speed_mask]
+        self.vanguard[speed_mask, V_VEL_Y] *= max_speeds[speed_mask] / speeds[speed_mask]
 
         # ====================================================================
         # v2.1 PHASE 4: POSITION STEP
         # ====================================================================
         self.vanguard[:, [V_POS_X, V_POS_Y]] += self.vanguard[:, [V_VEL_X, V_VEL_Y]] * dt
+
+        # PHASE 10: Nurse caste hive radius-locking (branchless constraint)
+        # Nurses stay within NURSE_HIVE_RADIUS of hive center
+        caste_ids_radius = (self.vanguard[:, V_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
+        is_nurse = (caste_ids_radius == CASTE_NURSE)
+
+        if np.any(is_nurse):
+            # Calculate distance from hive center
+            dx = self.vanguard[is_nurse, V_POS_X] - HIVE_CENTER_X
+            dy = self.vanguard[is_nurse, V_POS_Y] - HIVE_CENTER_Y
+            dist = np.sqrt(dx**2 + dy**2)
+
+            # Find nurses beyond radius
+            beyond_radius = dist > NURSE_HIVE_RADIUS
+
+            if np.any(beyond_radius):
+                # Pull back to radius boundary (elastic constraint)
+                scale = NURSE_HIVE_RADIUS / dist[beyond_radius]
+                self.vanguard[is_nurse, V_POS_X][beyond_radius] = HIVE_CENTER_X + dx[beyond_radius] * scale
+                self.vanguard[is_nurse, V_POS_Y][beyond_radius] = HIVE_CENTER_Y + dy[beyond_radius] * scale
 
         # World wrapping
         self.vanguard[:, V_POS_X] = np.clip(self.vanguard[:, V_POS_X], 0, WORLD_WIDTH)
@@ -542,20 +632,45 @@ class BeeSimulation:
         # ====================================================================
         # v2.1: ORGANIC JITTER (Legion also gets personality variance)
         # ====================================================================
+        # PHASE 10: Caste-specific jitter multipliers (branchless)
+        caste_ids_jitter = (self.legion[:, L_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
+        jitter_mults = np.choose(caste_ids_jitter, [SCOUT_JITTER_MULT, FORAGER_JITTER_MULT, NURSE_JITTER_MULT])
+
         self.legion[:, [L_VEL_X, L_VEL_Y]] = apply_organic_jitter(
-            self.legion[:, [L_VEL_X, L_VEL_Y]]
+            self.legion[:, [L_VEL_X, L_VEL_Y]],
+            jitter_mults=jitter_mults
         )
 
         # ====================================================================
         # v2.1: MAGNITUDE CLAMP (RED LINE: Velocity magnitude lock)
         # ====================================================================
+        # PHASE 10: Caste-specific speed limits (branchless scalar biasing)
+        caste_ids = (self.legion[:, L_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
+        speed_mults = np.choose(caste_ids, [SCOUT_SPEED_MULT, FORAGER_SPEED_MULT, NURSE_SPEED_MULT])
+        max_speeds = MAX_SPEED * speed_mults
+
         speeds = np.linalg.norm(self.legion[:, [L_VEL_X, L_VEL_Y]], axis=1)
-        speed_mask = speeds > MAX_SPEED
-        self.legion[speed_mask, L_VEL_X] *= MAX_SPEED / speeds[speed_mask]
-        self.legion[speed_mask, L_VEL_Y] *= MAX_SPEED / speeds[speed_mask]
+        speed_mask = speeds > max_speeds
+        self.legion[speed_mask, L_VEL_X] *= max_speeds[speed_mask] / speeds[speed_mask]
+        self.legion[speed_mask, L_VEL_Y] *= max_speeds[speed_mask] / speeds[speed_mask]
 
         # Update positions
         self.legion[:, [L_POS_X, L_POS_Y]] += self.legion[:, [L_VEL_X, L_VEL_Y]] * dt
+
+        # PHASE 10: Nurse caste hive radius-locking (branchless constraint)
+        caste_ids_radius = (self.legion[:, L_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
+        is_nurse = (caste_ids_radius == CASTE_NURSE)
+
+        if np.any(is_nurse):
+            dx = self.legion[is_nurse, L_POS_X] - HIVE_CENTER_X
+            dy = self.legion[is_nurse, L_POS_Y] - HIVE_CENTER_Y
+            dist = np.sqrt(dx**2 + dy**2)
+            beyond_radius = dist > NURSE_HIVE_RADIUS
+
+            if np.any(beyond_radius):
+                scale = NURSE_HIVE_RADIUS / dist[beyond_radius]
+                self.legion[is_nurse, L_POS_X][beyond_radius] = HIVE_CENTER_X + dx[beyond_radius] * scale
+                self.legion[is_nurse, L_POS_Y][beyond_radius] = HIVE_CENTER_Y + dy[beyond_radius] * scale
 
         # World wrapping
         self.legion[:, L_POS_X] = np.clip(self.legion[:, L_POS_X], 0, WORLD_WIDTH)
@@ -870,6 +985,48 @@ class BeeSimulation:
 
 
 # ============================================================================
+# TASK 8.2: SURGICAL TIMELINE DUMP (Phase 8 Instrumentation)
+# ============================================================================
+
+def _dump_surgical_timeline():
+    """
+    TASK 8.2: Dump buffered surgical timeline to terminal.
+    Called after frame 10 to prevent console I/O contamination during measurement.
+    """
+    from src.debug_visuals.distortion_system import _surgical_timeline_buffer
+
+    if not _surgical_timeline_buffer:
+        print("\n[TASK 8.2] No timeline data captured (GPU may have failed to initialize)")
+        return
+
+    print("\n" + "=" * 80)
+    print("SURGICAL TIMELINE (Task 8.2) - Phase 8 Latency Trap Falsification")
+    print("=" * 80)
+    print(f"{'Frame':<8} {'Upload':<10} {'Dispatch':<10} {'Download':<10} {'Sync':<10} {'Total':<10}")
+    print("-" * 80)
+
+    for entry in _surgical_timeline_buffer:
+        frame = entry.get('frame', -1)
+        upload = entry.get('upload_ms', 0.0)
+        dispatch = entry.get('dispatch_ms', 0.0)
+        download = entry.get('download_ms', 0.0)
+        sync = entry.get('sync_ms', 0.0)
+        total = entry.get('total_ms', 0.0)
+
+        print(f"{frame:<8} {upload:<10.2f} {dispatch:<10.2f} {download:<10.2f} {sync:<10.2f} {total:<10.2f}")
+
+    print("=" * 80)
+    print("LEGEND:")
+    print("  Upload   = CPU->GPU texture transfer time")
+    print("  Dispatch = GPU shader execution time")
+    print("  Download = GPU->CPU readback time")
+    print("  Sync     = Driver synchronization overhead")
+    print("  Total    = Sum of all stages")
+    print("=" * 80)
+    print()
+
+
+# ============================================================================
 # MAIN LOOP
 # ============================================================================
 
@@ -903,10 +1060,14 @@ def main():
     profiler = PerformanceProfiler()
 
     # ====================================================================
-    # PHASE 6: DEBUG VISUALS (GPU-accelerated stress visualization)
+    # PHASE 6: DEBUG VISUALS (CPU-based stress visualization)
     # ====================================================================
+    # SURGERY 8.3: GPU distortion disabled per One-Way Doctrine
+    # Reason: 19.45ms download tax is architectural (Pygame-ModernGL impedance)
+    # Status: GPU detection preserved for capability documentation
     perf_monitor = PerformanceMonitor()
-    distortion_system = DistortionSystem(screen_width, screen_height, perf_monitor)
+    # distortion_system = DistortionSystem(screen_width, screen_height, perf_monitor)  # DISABLED: Surgery 8.3
+    distortion_system = None  # Production: CPU-only rendering per Phase 8 verdict
     halo_system = HaloSystem(screen_width, screen_height)
     vignette_system = VignetteSystem(screen_width, screen_height)
 
@@ -930,11 +1091,13 @@ def main():
     print("  F: Toggle density field view")
     print("  P: Toggle pheromone heatmap (PHASE 4)")
     print("  [ / ]: Adjust pheromone opacity (PHASE 4)")
+    print("  S: Take screenshot (saved to screenshots/ folder)")
     print("  ESC: Quit")
-    print("\nPhase 6 Debug Visuals:")
+    print("\nPhase 8 Debug Visuals (CPU-Optimized):")
     print(f"  - Stress halos: {'ENABLED' if halo_system.enabled else 'DISABLED'}")
     print(f"  - Stress vignette: {'ENABLED' if vignette_system.enabled else 'DISABLED'}")
-    print(f"  - GPU distortion: {'ENABLED' if distortion_system.enabled else 'DISABLED'}")
+    print(f"  - GPU distortion: DISABLED (Surgery 8.3: One-Way Doctrine)")
+    print(f"  - GPU capability: {'DETECTED' if perf_monitor.gpu_enabled else 'UNAVAILABLE'} (ceremonial)")
     print(f"  - Auto-throttle: Active at {THROTTLE_THRESHOLD_MS}ms breach")
     print()
 
@@ -982,6 +1145,14 @@ def main():
                 elif event.key == pygame.K_RIGHTBRACKET:  # PHASE 4: Increase opacity
                     pheromone_opacity = min(0.4, pheromone_opacity + 0.05)
                     print(f"Pheromone opacity: {pheromone_opacity:.0%}")
+                elif event.key == pygame.K_s:  # Screenshot capture
+                    import os
+                    import datetime
+                    os.makedirs("screenshots", exist_ok=True)
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"screenshots/phase9_{MAX_VANGUARD}v_{MAX_LEGION}l_{timestamp}.png"
+                    pygame.image.save(screen, filename)
+                    print(f"[SCREENSHOT] Saved: {filename}")
 
         # Camera control
         keys = pygame.key.get_pressed()
@@ -1035,19 +1206,20 @@ def main():
             # Render stress vignette (CPU single blit)
             vignette_system.render_vignette(screen, simulation.vanguard, simulation.legion)
 
-            # Apply GPU distortion shader (if available)
-            if distortion_system.enabled:
-                # SURGICAL FIX (TRIAGE-003): Phase 4 only has home trail (single 2D grid)
-                # Convert to RGB by replicating home trail across all channels
-                # NOTE: np.stack creates temporary array (~64KB) - negligible overhead
-                # Future: When food/alarm trails added, replace with proper 3-channel field
-                pheromone_home = simulation.pheromone_system.grid  # (128, 128) float32
-                pheromone_rgb = np.stack([
-                    pheromone_home,  # R: Home trail
-                    pheromone_home,  # G: Home trail (food trails not implemented yet)
-                    pheromone_home   # B: Home trail (alarm trails not implemented yet)
-                ], axis=2)
-                screen = distortion_system.apply_distortion(screen, pheromone_rgb)
+            # ================================================================
+            # SURGERY 8.3: GPU DISTORTION DISABLED (One-Way Doctrine)
+            # ================================================================
+            # VERDICT: Path A (Direct FBO) falsified due to Pygame-ModernGL impedance
+            # EVIDENCE: 19.45ms download tax is architectural (fbo.read() crosses PCIe bus)
+            # DECISION: GPU remains "capable" but production-disabled per Phase 8 findings
+            # RECLAIMED: ~5ms upload overhead returned to simulation budget
+            # PRESERVED: CPU-based halos + vignette provide visual richness
+            #
+            # if distortion_system.enabled:
+            #     pheromone_home = simulation.pheromone_system.grid
+            #     pheromone_rgb = np.stack([pheromone_home, pheromone_home, pheromone_home], axis=2)
+            #     screen = distortion_system.apply_distortion(screen, pheromone_rgb, frame_counter)
+            # ================================================================
 
         # Debug overlay
         if debug_mode:
@@ -1067,14 +1239,24 @@ def main():
         profiler.record_frame(total_time, sim_time, render_time)
         perf_monitor.record_frame(total_time)  # Check for >14ms breach
 
-        # TRIAGE-005 EMERGENCY: Immediate throttle if total > 12ms
-        if total_time > 12.0 and distortion_system.enabled:
+        # ====================================================================
+        # PHASE 8: EMERGENCY THROTTLE (CPU-only, no GPU distortion)
+        # ====================================================================
+        # SURGERY 8.3: GPU distortion removed, emergency throttle now targets halos/vignette
+        if total_time > 12.0 and perf_monitor.debug_enabled:
             print(f"\n[EMERGENCY] Total time {total_time:.1f}ms > 12ms - ENGAGING THROTTLE")
-            print(f"  - Disabling GPU distortion (likely cause)")
             print(f"  - Disabling halos and vignette")
-            distortion_system.enabled = False
             halo_system.enabled = False
             vignette_system.enabled = False
+            perf_monitor.debug_enabled = False
+
+        # ====================================================================
+        # TASK 8.2: TIMELINE DUMP (Preserved for historical record)
+        # ====================================================================
+        # NOTE: This code path is inactive (distortion_system = None)
+        # Preserved for reference to Phase 8 experimentation
+        # if frame_counter == 10:
+        #     _dump_surgical_timeline()
 
         # Flip display
         pygame.display.flip()
@@ -1091,8 +1273,8 @@ def main():
     print(f"Avg Render: {stats['avg_render_ms']:.2f} ms")
     print(f"Budget: {FRAME_BUDGET_MS:.1f} ms")
 
-    # PHASE 6: Cleanup debug visual resources
-    distortion_system.cleanup()
+    # PHASE 8: Cleanup debug visual resources
+    # distortion_system.cleanup()  # DISABLED: Surgery 8.3 (GPU distortion removed)
     halo_system.cleanup()
     vignette_system.cleanup()
 

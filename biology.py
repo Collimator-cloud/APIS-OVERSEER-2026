@@ -341,9 +341,10 @@ def apply_stress_dynamics(state_array, dt, is_vanguard=True):
         state_array[high_stress, health_col] -= 0.002 * dt
 
 
-def apply_organic_jitter(velocities, alignment_threshold=ORGANIC_JITTER_THRESHOLD):
+def apply_organic_jitter(velocities, alignment_threshold=ORGANIC_JITTER_THRESHOLD, jitter_mults=None):
     """
     v2.1: Inject Gaussian noise when swarm alignment is high.
+    v11.0 (PHASE 10): Added caste-specific jitter multipliers.
 
     Prevents "railroading" by adding zero-mean jitter to velocity.
     Applied AFTER steering forces but BEFORE magnitude clamping.
@@ -351,6 +352,7 @@ def apply_organic_jitter(velocities, alignment_threshold=ORGANIC_JITTER_THRESHOL
     Args:
         velocities: (N, 2) array of velocity vectors
         alignment_threshold: Trigger jitter when alignment ≥ this value (0.70 default)
+        jitter_mults: (N,) array of caste-specific jitter multipliers (PHASE 10)
 
     Returns:
         (N, 2) modified velocities with jitter
@@ -378,9 +380,18 @@ def apply_organic_jitter(velocities, alignment_threshold=ORGANIC_JITTER_THRESHOL
     high_alignment = alignment >= alignment_threshold
 
     if np.any(high_alignment):
-        # Vectorized Gaussian noise (σ = 0.12 * MAX_SPEED)
-        noise = np.random.normal(0, ORGANIC_JITTER_STD * MAX_SPEED, size=(np.sum(high_alignment), 2))
-        velocities[high_alignment] += noise
+        # PHASE 10: Apply caste-specific jitter multipliers
+        if jitter_mults is not None:
+            # Extract multipliers for high-alignment bees
+            active_mults = jitter_mults[high_alignment]
+            # Vectorized Gaussian noise with caste-specific std deviation
+            noise = np.random.normal(0, 1.0, size=(np.sum(high_alignment), 2))
+            noise *= (ORGANIC_JITTER_STD * MAX_SPEED * active_mults[:, np.newaxis])
+            velocities[high_alignment] += noise
+        else:
+            # Legacy path: uniform jitter
+            noise = np.random.normal(0, ORGANIC_JITTER_STD * MAX_SPEED, size=(np.sum(high_alignment), 2))
+            velocities[high_alignment] += noise
 
     return velocities
 

@@ -8,12 +8,12 @@ import numpy as np
 # ============================================================================
 # POPULATION TIERS (Strict limits)
 # ============================================================================
-# EMERGENCY PERFORMANCE SCALE REDUCTION (TRIAGE-001)
-# Temporary 3x reduction to reach 30 FPS target
+# PHASE 9.3: 1,200-BEE PRIMARY TARGET (v9.3 Safe-Colony Baseline)
+# Phase 9.2 closed: 1,000 bees @ 7.99ms median, BJI 4.1-4.2 (LOCKED)
 # Original: 300 Vanguard + 2000 Legion = ~25,000 illusion
-# Current:  100 Vanguard +  500 Legion = ~8,300 illusion
-MAX_VANGUARD = 100      # Full-detail bees (TEMP: was 300)
-MAX_LEGION = 500        # Mid-detail bees (TEMP: was 2000)
+# Phase 9.3: 100 Vanguard + 1100 Legion = 1,200 total (primary target)
+MAX_VANGUARD = 100      # Full-detail bees (Phase 9: maintained at 100)
+MAX_LEGION = 1100       # Mid-detail bees (Phase 9.3: scaled from 900 → 1100)
 FIELD_RES = 128         # Density field resolution (128x128 chunks)
 NEBULA_PARTICLES_PER_CHUNK = 0.6  # ~4,900 ephemeral particles (TEMP: was 1.4 → ~22,700)
 
@@ -196,6 +196,36 @@ FLAG_DEAD = 1 << 3
 FLAG_FORESHADOW_DEATH = 1 << 4
 
 # ============================================================================
+# PHASE 10: CASTE SYSTEM (v11.0 - Trinity of Roles)
+# ============================================================================
+# Caste IDs stored in bits 5-6 of STATE_FLAGS (3 states need 2 bits)
+# Extraction: (flags >> 5) & 0b11
+CASTE_SCOUT = 0      # 10% of population - Explorers
+CASTE_FORAGER = 1    # 60% of population - Resource gatherers
+CASTE_NURSE = 2      # 30% of population - Hive workers/guards
+
+# Caste bit masks for STATE_FLAGS manipulation
+CASTE_BITS_OFFSET = 5
+CASTE_BITS_MASK = 0b11 << CASTE_BITS_OFFSET  # Bits 5-6
+
+# Caste behavioral modifiers (branchless scalar multipliers)
+# Scout modifiers (10% - fast, erratic explorers)
+SCOUT_SPEED_MULT = 1.2        # 20% faster movement
+SCOUT_JITTER_MULT = 2.0       # 2× organic jitter (high exploration randomness)
+SCOUT_PHEROMONE_MULT = 1.5    # 50% stronger pheromone deposits
+
+# Forager modifiers (60% - standard resource gatherers)
+FORAGER_SPEED_MULT = 1.0      # Standard speed
+FORAGER_JITTER_MULT = 1.0     # Standard jitter
+FORAGER_GRADIENT_MULT = 1.3   # 30% more sensitive to pheromone gradients
+
+# Nurse/Guard modifiers (30% - hive-bound workers)
+NURSE_SPEED_MULT = 0.5        # 50% slower (hive workers)
+NURSE_JITTER_MULT = 0.6       # 40% less jitter (stable workers)
+NURSE_COHESION_MULT = 2.0     # 2× cohesion force (tight clustering)
+NURSE_HIVE_RADIUS = 250.0     # Max distance from hive center (pixels)
+
+# ============================================================================
 # PHASE 4: PHEROMONE SYSTEM (The Garden)
 # ============================================================================
 PHEROMONE_GRID_SIZE = 128        # 128x128 pheromone grid
@@ -255,17 +285,17 @@ GPU_MIN_OPENGL_VERSION = (3, 3)  # ModernGL requires OpenGL 3.3+
 GPU_MIN_TEXTURE_SIZE = 2048      # Minimum texture dimension support
 
 # Distortion System (Pheromone-driven stress shimmer)
-DISTORTION_ENABLED = True        # Enable GPU distortion shader (auto-disabled if GPU unavailable)
+DISTORTION_ENABLED = False       # Enable GPU distortion shader (auto-disabled if GPU unavailable)
 DISTORTION_AMPLITUDE = 8.0       # Max pixel displacement (pixels)
 DISTORTION_FREQUENCY = 0.5       # Perlin noise frequency
 
 # Halo System (Bee stress indicators)
-HALO_ENABLED = True              # Enable stress halos around bees
+HALO_ENABLED = False             # Enable stress halos around bees
 HALO_RADIUS = 32                 # Halo texture size (pixels)
 HALO_CULL_DISTANCE = 1.5         # Cull factor (1.5x diagonal = visible bees only)
 
 # Vignette System (Screen-space stress overlay)
-VIGNETTE_ENABLED = True          # Enable stress vignette
+VINGNETTE_ENABLED = False         # Enable stress vignette
 VIGNETTE_INNER_RADIUS = 0.6      # Inner radius (normalized 0-1)
 VIGNETTE_OUTER_RADIUS = 1.0      # Outer radius (normalized 0-1)
 

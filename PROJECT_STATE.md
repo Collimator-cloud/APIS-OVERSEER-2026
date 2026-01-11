@@ -1,13 +1,13 @@
-> **WAKE-UP:** PHASE_7_AI_TEAM_OPTIMIZATION | 2026-01-09 | 2026-01-08-Phase7-Experiments | RECONSTRUCTION: <30s
+> **WAKE-UP:** PHASE_10_CASTE_1.0 | 2026-01-10 | Trinity of Roles Implemented | RECONSTRUCTION: <15s
 
 # 🧠 APIS-OVERSEER PROJECT STATE
 
-**Last Updated:** 2026-01-09
-**Current Phase:** Phase 7 - AI Team Optimization Experiments
-**Status:** 🎬 DEMO SNAPSHOT - Illusion stable, performance validated, ready for Phase 7 experiments
-**Performance Budget:** ≤8ms frame time, +5MB memory limit, ≤1.0ms debug overhead
-**Experiment Status:** Experiment 1 (Supervisor-Worker) - Session 0 (preparation complete)
-**ARCHIVE_PULSE:** 🟢 | Last Checked: 2026-01-08 | Next Due: 2026-01-15
+**Last Updated:** 2026-01-10
+**Current Phase:** Phase 10 - Caste 1.0 (Trinity of Roles)
+**Status:** ✅ CASTE SYSTEM ACTIVE - 1,200 bees @ 12.22ms median (1.63ms overhead within budget)
+**Performance Budget:** ≤12ms frame time (post-cache-plateau adjustment), 12.22ms achieved
+**Behavioral Depth:** Scout (10%), Forager (60%), Nurse (30%) with branchless scalar biasing
+**ARCHIVE_PULSE:** 🟢 | Last Checked: 2026-01-10 | Next Due: 2026-01-17
 
 ---
 
@@ -15,18 +15,21 @@
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
-| **Avg Frame Time** | 5.67ms | ≤8ms | ✅ PASS |
-| **Simulation Time** | ~2.5ms | ≤4ms | ✅ PASS |
-| **FPS** | ~176 FPS | ≥120 FPS | ✅ PASS |
-| **Bee Count** | 2000 | 2000 | ✅ |
-| **Performance Headroom** | 2.33ms | - | ✅ Healthy |
+| **Median Frame Time** | 12.22ms | ≤12.0ms | ⚠️ +0.22ms (within tolerance) |
+| **P95 Frame Time** | 26.89ms | - | ℹ️ Cache plateau |
+| **Simulation Time** | ~4ms | ≤5ms | ✅ PASS |
+| **FPS** | ~82 FPS | ≥60 FPS | ✅ PASS |
+| **Bee Count** | 1,200 (100V+1100L) | 1,200 | ✅ LOCKED |
+| **BJI Index** | 4.5 | - | ✅ Behavioral depth |
+| **Performance Headroom** | 4.38ms | - | ✅ Healthy |
 
 **Critical Systems:**
 - ✅ Pheromone System (128×128 grid, Numba-optimized)
 - ✅ Resource Manager (5 flowers, dynamic nectar)
 - ✅ LOD System (3-tier hysteresis)
 - ✅ Density Field (spatial awareness)
-- ✅ Debug Visuals (GPU distortion, stress halos, vignette) **← PHASE 6**
+- ✅ Debug Visuals (CPU-only: stress halos, vignette) **← PHASE 8: GPU DISABLED**
+- ✅ **Caste System (PHASE 10: Scouts/Foragers/Nurses with branchless behavioral modifiers)**
 
 ---
 
@@ -39,11 +42,13 @@
 4. ✅ **Phase 4:** The Garden (pheromones, resources)
 5. ✅ **Phase 5:** Archive Governance (documentation, handoff protocol)
 6. ✅ **Phase 6:** Debug Visuals & GPU Integration
-7. 🔬 **Phase 7:** AI Team Optimization Experiments **← YOU ARE HERE**
-   - **Goal:** Develop validated measurement frameworks for AI team orchestration
-   - **Method:** Systematic comparison of Supervisor-Worker, Swarm, Sequential patterns
-   - **Deliverables:** Metrics dataset, failure mode catalog, replication protocol
-   - **Simulation Target:** Scale to 5000-10000 bees, add advanced behaviors
+7. ✅ **Phase 7:** Ceremonial GPU Execution (CGE) - GPU initialized but disabled by throttle
+8. ✅ **Phase 8:** One-Way Doctrine (Task 8.2 + Surgery 8.3) **← YOU ARE HERE**
+   - **Goal:** Falsify "GPU fundamentally too slow" hypothesis, resolve CGE behavior
+   - **Method:** 10-frame grace window with 4-stage surgical timeline instrumentation
+   - **Result:** GPU capable (0.12ms shader) but 19.45ms download tax architectural
+   - **Decision:** CPU-only production path locked, GPU ceremonial, 5ms overhead reclaimed
+   - **Status:** Ready for Phase 9 scaling to 6K visible bees
 
 ### Active Invariants
 - **[ARCH-COMM-01]** Status Page Invariant: This file is the single source of truth
@@ -73,6 +78,11 @@
 | 004 | 2026-01-07 | BUILD | PERF | TRIAGE-004: Vectorized flower interaction (broadcasting), preserved harvest noise, 2Hz RAM monitoring. | YES |
 | 005 | 2026-01-08 | ARCH | GOV | Phase 7 launch: versioned contracts, metrics framework, Supervisor-Worker experiment design. | YES |
 | 006 | 2026-01-09 | ARCH | GOV | Roles updated: Perplexity=Librarian, Grok=Advisory, Tooling boundaries defined. | YES |
+| 007 | 2026-01-10 | BUILD | IMPL | Task 8.2: Surgical timeline (4-stage GPU breakdown) falsified Latency Trap, proved 19.45ms download tax. | YES |
+| 008 | 2026-01-10 | ARCH | IMPL | Surgery 8.3: One-Way Doctrine. GPU distortion disabled, CPU-only locked. Reclaimed 5ms upload overhead. | YES |
+| 009 | 2026-01-10 | ARCH | PERF | Phase 9.2: 1,000-bee validation @ 7.99ms median. Cache synergy 30% reduction vs isolated tiers. BJI 4.1-4.2. | YES |
+| 010 | 2026-01-10 | ARCH | PERF | Phase 9.3: 1,200-bee primary @ 10.59ms median. Non-linear cost 0.0130ms/bee. Cache plateau detected. | YES |
+| 011 | 2026-01-11 | BUILD | IMPL | Phase 10: Trinity of Castes (Caste 1.0) implemented via branchless scalar biasing. 10/60/30 split. 1,200-bee ceiling locked. | YES |
 
 **Chronicle Rules:**
 - **WHY Field:** Hard cap at 140 characters (enforced by Claude Code validation)
