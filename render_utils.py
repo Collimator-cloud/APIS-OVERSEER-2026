@@ -111,16 +111,26 @@ class BeeRenderer:
             show_pheromone: Toggle pheromone heatmap overlay
             pheromone_opacity: Opacity for pheromone heatmap (0.0-0.4)
         """
-        # PHASE 4: Render pheromone heatmap first (if enabled)
-        if show_pheromone and 'pheromone_heatmap' in render_data:
-            self._render_pheromone_heatmap(screen, render_data['pheromone_heatmap'],
-                                          camera_x, camera_y, pheromone_opacity)
+        # PHASE 12.0: Render dual-channel ghost-field (if enabled)
+        if show_pheromone:
+            if 'resource_grid' in render_data and 'exploration_grid' in render_data:
+                self._render_ghost_field(screen, render_data['resource_grid'],
+                                        render_data['exploration_grid'],
+                                        camera_x, camera_y, pheromone_opacity)
+            elif 'pheromone_heatmap' in render_data:
+                # PHASE 4: Legacy single-channel fallback
+                self._render_pheromone_heatmap(screen, render_data['pheromone_heatmap'],
+                                              camera_x, camera_y, pheromone_opacity)
 
         # PHASE 4: Render flowers
         if 'flowers' in render_data:
             self._render_flowers(screen, render_data['flowers'], camera_x, camera_y)
 
-        # Render in layer order: Nebula -> Legion -> Vanguard
+        # Render in layer order: Ghost Bees -> Nebula -> Legion -> Vanguard
+        # PHASE 13.0: Render ghost bees if present
+        if 'ghost_bees' in render_data:
+            self._render_ghost_bees(screen, render_data['ghost_bees'], camera_x, camera_y)
+
         self._render_nebula(screen, render_data['nebula'], camera_x, camera_y)
         self._render_legion(screen, render_data['legion'], camera_x, camera_y)
         self._render_vanguard(screen, render_data['vanguard'], camera_x, camera_y)
@@ -220,6 +230,70 @@ class BeeRenderer:
         # Batch blit
         if blit_sequence:
             screen.blits(blit_sequence, doreturn=False)
+
+    def _render_ghost_bees(self, screen, ghost_bees, camera_x, camera_y):
+        """
+        PHASE 14.0: Render Ghost Bees with distance-based color shading.
+
+        Ghost bees provide visual mass (6K total agents) without computational cost.
+        Rendering: Single-pixel dots with 3-step color lookup based on distance from hive.
+
+        OPTIMIZATION: Use numpy indexing to batch-set pixels via PixelArray.
+
+        Args:
+            screen: Pygame surface
+            ghost_bees: (4800, 4) array [x, y, vx, vy]
+            camera_x, camera_y: Camera position
+        """
+        # Transform world to screen coordinates
+        screen_x = ghost_bees[:, G_POS_X] - camera_x + self.screen_width / 2
+        screen_y = ghost_bees[:, G_POS_Y] - camera_y + self.screen_height / 2
+
+        # Frustum culling (only render visible ghosts)
+        visible = (
+            (screen_x >= 1) & (screen_x < self.screen_width - 1) &
+            (screen_y >= 1) & (screen_y < self.screen_height - 1)
+        )
+
+        # Filter to visible ghosts
+        visible_positions = ghost_bees[visible]
+        screen_x_int = screen_x[visible].astype(int)
+        screen_y_int = screen_y[visible].astype(int)
+
+        # PHASE 14.0: Distance-based color shading (3-step lookup)
+        # Calculate distance from hive center
+        dx = visible_positions[:, G_POS_X] - HIVE_CENTER_X
+        dy = visible_positions[:, G_POS_Y] - HIVE_CENTER_Y
+        distances = np.sqrt(dx**2 + dy**2)
+
+        # 3-step color classification (branchless via np.where)
+        is_near = distances < GHOST_DISTANCE_THRESHOLD_1
+        is_mid = (distances >= GHOST_DISTANCE_THRESHOLD_1) & (distances < GHOST_DISTANCE_THRESHOLD_2)
+        is_far = distances >= GHOST_DISTANCE_THRESHOLD_2
+
+        # Assign colors per ghost
+        colors = np.zeros((len(visible_positions), 3), dtype=np.uint8)
+        colors[is_near] = GHOST_COLOR_NEAR
+        colors[is_mid] = GHOST_COLOR_MID
+        colors[is_far] = GHOST_COLOR_FAR
+
+        # Batch pixel drawing using PixelArray (lock surface once, write all pixels)
+        try:
+            pxarray = pygame.PixelArray(screen)
+
+            # Set pixels in batch (per-color group for PixelArray compatibility)
+            for color_rgb in [GHOST_COLOR_NEAR, GHOST_COLOR_MID, GHOST_COLOR_FAR]:
+                mask = np.all(colors == color_rgb, axis=1)
+                if np.any(mask):
+                    x_coords = screen_x_int[mask]
+                    y_coords = screen_y_int[mask]
+                    mapped_color = screen.map_rgb(color_rgb)
+                    pxarray[x_coords, y_coords] = mapped_color
+
+            del pxarray  # Unlock surface
+        except:
+            # Fallback: skip ghost rendering if PixelArray fails
+            pass
 
     def _render_nebula(self, screen, nebula_particles, camera_x, camera_y):
         """
@@ -366,6 +440,81 @@ class BeeRenderer:
                 surface = pygame.Surface((int(chunk_size), int(chunk_size)), pygame.SRCALPHA)
                 surface.fill(color)
                 screen.blit(surface, (int(screen_x), int(screen_y)))
+
+    def _render_ghost_field(self, screen, resource_grid, exploration_grid, camera_x, camera_y, opacity=0.2):
+        """
+        PHASE 12.0: Render dual-channel ghost-field overlay.
+
+        Cyan trails = Resource grid (Forager food paths)
+        Violet markers = Exploration grid (Scout territory)
+
+        Args:
+            screen: Pygame surface
+            resource_grid: (128, 128) float32 array - stable food trails
+            exploration_grid: (128, 128) float32 array - volatile markers
+            camera_x, camera_y: Camera position
+            opacity: Overlay opacity (0.0 - 0.4)
+        """
+        opacity = np.clip(opacity, 0.0, 0.4)
+        chunk_size = WORLD_WIDTH / PHEROMONE_GRID_SIZE
+
+        # Normalize both grids for visualization
+        max_resource = np.max(resource_grid)
+        max_exploration = np.max(exploration_grid)
+
+        for cy in range(PHEROMONE_GRID_SIZE):
+            for cx in range(PHEROMONE_GRID_SIZE):
+                resource_val = resource_grid[cy, cx]
+                exploration_val = exploration_grid[cy, cx]
+
+                # Skip empty cells
+                if resource_val < 0.01 and exploration_val < 0.01:
+                    continue
+
+                # World coordinates
+                world_x = cx * chunk_size
+                world_y = cy * chunk_size
+
+                # Screen coordinates
+                screen_x = world_x - camera_x + self.screen_width / 2
+                screen_y = world_y - camera_y + self.screen_height / 2
+
+                # Skip if off-screen
+                if not (-chunk_size <= screen_x < self.screen_width + chunk_size and
+                        -chunk_size <= screen_y < self.screen_height + chunk_size):
+                    continue
+
+                # Blend colors: Cyan (resource) + Violet (exploration)
+                r, g, b = 0, 0, 0
+                total_alpha = 0
+
+                if resource_val > 0.01 and max_resource > 0.01:
+                    # Cyan (0, 255, 255) for resource trails
+                    intensity = min(resource_val / max_resource, 1.0)
+                    alpha = intensity * opacity
+                    r += 0 * alpha
+                    g += 255 * alpha
+                    b += 255 * alpha
+                    total_alpha += alpha
+
+                if exploration_val > 0.01 and max_exploration > 0.01:
+                    # Violet (180, 0, 255) for exploration markers
+                    intensity = min(exploration_val / max_exploration, 1.0)
+                    alpha = intensity * opacity
+                    r += 180 * alpha
+                    g += 0 * alpha
+                    b += 255 * alpha
+                    total_alpha += alpha
+
+                if total_alpha > 0:
+                    # Normalize and convert to integer color
+                    final_alpha = min(int(total_alpha * 255), 255)
+                    color = (int(r), int(g), int(b), final_alpha)
+
+                    # Draw as filled rect with alpha
+                    surface = pygame.Surface((int(chunk_size), int(chunk_size)), pygame.SRCALPHA)
+                    surface.fill(color)
+                    screen.blit(surface, (int(screen_x), int(screen_y)))
 
     def render_debug_overlay(self, screen, render_data, fps, sim_time_ms):
         """

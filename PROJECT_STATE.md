@@ -1,13 +1,13 @@
-> **WAKE-UP:** PHASE_10_CASTE_1.0 | 2026-01-10 | Trinity of Roles Implemented | RECONSTRUCTION: <15s
+> **WAKE-UP:** PHASE_14_HALO_SEMANTICS | 2026-01-11 | Social Translation Active | RECONSTRUCTION: <15s
 
 # 🧠 APIS-OVERSEER PROJECT STATE
 
-**Last Updated:** 2026-01-10
-**Current Phase:** Phase 10 - Caste 1.0 (Trinity of Roles)
-**Status:** ✅ CASTE SYSTEM ACTIVE - 1,200 bees @ 12.22ms median (1.63ms overhead within budget)
-**Performance Budget:** ≤12ms frame time (post-cache-plateau adjustment), 12.22ms achieved
-**Behavioral Depth:** Scout (10%), Forager (60%), Nurse (30%) with branchless scalar biasing
-**ARCHIVE_PULSE:** 🟢 | Last Checked: 2026-01-10 | Next Due: 2026-01-17
+**Last Updated:** 2026-01-11
+**Current Phase:** Phase 14 - Halo Semantics (The Social Translation)
+**Status:** ✅ HALO SYSTEM ACTIVE - 6,000 agents @ 10.79ms median (1.21ms headroom)
+**Performance Budget:** ≤12ms frame time (Phase 14 target), 10.79ms achieved
+**Visual Semantics:** Caste RGB halos (Scout/Forager/Nurse) + vitality modulation + ghost distance shading
+**ARCHIVE_PULSE:** 🟢 | Last Checked: 2026-01-11 | Next Due: 2026-01-18
 
 ---
 
@@ -15,21 +15,23 @@
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
-| **Median Frame Time** | 12.22ms | ≤12.0ms | ⚠️ +0.22ms (within tolerance) |
-| **P95 Frame Time** | 26.89ms | - | ℹ️ Cache plateau |
-| **Simulation Time** | ~4ms | ≤5ms | ✅ PASS |
-| **FPS** | ~82 FPS | ≥60 FPS | ✅ PASS |
-| **Bee Count** | 1,200 (100V+1100L) | 1,200 | ✅ LOCKED |
+| **Median Frame Time** | 10.79ms | ≤12.0ms | ✅ PASS (+1.21ms headroom) |
+| **P95 Frame Time** | 23.38ms | - | ℹ️ Cache plateau |
+| **Simulation Time** | ~4.6ms | ≤5ms | ✅ PASS |
+| **FPS** | ~92 FPS | ≥60 FPS | ✅ PASS |
+| **Agent Count** | 6,000 (100V+1100L+4800G) | 6,000 | ✅ LOCKED |
 | **BJI Index** | 4.5 | - | ✅ Behavioral depth |
-| **Performance Headroom** | 4.38ms | - | ✅ Healthy |
+| **Halo Render Count** | 200 max | 200 | ✅ Distance culled |
 
 **Critical Systems:**
-- ✅ Pheromone System (128×128 grid, Numba-optimized)
+- ✅ Pheromone System (Dual-channel: Resource + Exploration grids, alternating updates)
 - ✅ Resource Manager (5 flowers, dynamic nectar)
 - ✅ LOD System (3-tier hysteresis)
 - ✅ Density Field (spatial awareness)
-- ✅ Debug Visuals (CPU-only: stress halos, vignette) **← PHASE 8: GPU DISABLED**
-- ✅ **Caste System (PHASE 10: Scouts/Foragers/Nurses with branchless behavioral modifiers)**
+- ✅ Vitality System (Orthogonal maturity: Youth/Prime/Elder performance modulation)
+- ✅ Caste System (Scouts/Foragers/Nurses with branchless behavioral biasing)
+- ✅ Ghost-Bee Bridge (4,800 minimal agents, distance-based color shading)
+- ✅ **Halo Semantics (PHASE 14: Caste RGB encoding + vitality alpha modulation, 200 max)**
 
 ---
 
@@ -83,6 +85,7 @@
 | 009 | 2026-01-10 | ARCH | PERF | Phase 9.2: 1,000-bee validation @ 7.99ms median. Cache synergy 30% reduction vs isolated tiers. BJI 4.1-4.2. | YES |
 | 010 | 2026-01-10 | ARCH | PERF | Phase 9.3: 1,200-bee primary @ 10.59ms median. Non-linear cost 0.0130ms/bee. Cache plateau detected. | YES |
 | 011 | 2026-01-11 | BUILD | IMPL | Phase 10: Trinity of Castes (Caste 1.0) implemented via branchless scalar biasing. 10/60/30 split. 1,200-bee ceiling locked. | YES |
+| 012 | 2026-01-11 | BUILD | IMPL | Phase 14: Halo Semantics. Caste RGB halos (Scout/Forager/Nurse) + vitality sin(π×maturity) alpha. 6K agents @ 10.79ms. | YES |
 
 **Chronicle Rules:**
 - **WHY Field:** Hard cap at 140 characters (enforced by Claude Code validation)

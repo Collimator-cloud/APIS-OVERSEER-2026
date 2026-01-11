@@ -17,6 +17,11 @@ MAX_LEGION = 1100       # Mid-detail bees (Phase 9.3: scaled from 900 → 1100)
 FIELD_RES = 128         # Density field resolution (128x128 chunks)
 NEBULA_PARTICLES_PER_CHUNK = 0.6  # ~4,900 ephemeral particles (TEMP: was 1.4 → ~22,700)
 
+# PHASE 13.0: Ghost-Bee Bridge (The 6K Dawn)
+MAX_GHOST_BEES = 4800   # Single-pixel LOD agents (no steering, no pheromones)
+GHOST_BEE_ALPHA = 0.25  # Fixed alpha for ghost rendering (faint presence)
+GHOST_BEE_JITTER = 0.1  # Brownian jitter magnitude (pixels/frame)
+
 # ============================================================================
 # ARRAY COLUMN INDICES
 # ============================================================================
@@ -50,6 +55,7 @@ V_COHESION = 16      # Neighbor density (illusion proxy)
 V_TRAIL_PHASE = 17   # For animation continuity
 V_REGEN_RATE = 18    # LEGACY: Individual health regen rate (0.0008-0.0012) - subsumed by REGEN_MOD
 V_DEATH_THRESHOLD = 19  # LEGACY: Individual death threshold (0.08-0.12)
+V_MATURITY = 20      # PHASE 11.2: Vitality scalar [0.0-1.0] (orthogonal to caste)
 
 # ============================================================================
 # LEGION TIER (500 bees, 15 columns total)
@@ -72,6 +78,16 @@ L_STATE_FLAGS = 11   # PHASE 2: Bitfield for FLAG_ALIVE, FLAG_DEAD, etc.
 L_LOD_LEVEL = 12     # PHASE 2: LOD level (always 1 for Legion tier)
 L_REGEN_RATE = 13    # LEGACY: Individual health regen rate (0.0008-0.0012) - subsumed by REGEN_MOD
 L_DEATH_THRESHOLD = 14  # LEGACY: Individual death threshold (0.08-0.12)
+L_MATURITY = 15      # PHASE 11.2: Vitality scalar [0.0-1.0] (orthogonal to caste)
+
+# ============================================================================
+# GHOST BEE TIER (4800 bees, 4 columns total) - PHASE 13.0
+# ============================================================================
+# Minimal LOD agents: Position + Velocity only (no steering, no pheromones)
+G_POS_X = 0
+G_POS_Y = 1
+G_VEL_X = 2
+G_VEL_Y = 3
 
 # Density Field (128, 128, 4) layers
 D_DENSITY = 0        # Mean bee count per chunk
@@ -224,16 +240,47 @@ NURSE_SPEED_MULT = 0.5        # 50% slower (hive workers)
 NURSE_JITTER_MULT = 0.6       # 40% less jitter (stable workers)
 NURSE_COHESION_MULT = 2.0     # 2× cohesion force (tight clustering)
 NURSE_HIVE_RADIUS = 250.0     # Max distance from hive center (pixels)
+NURSE_HIVE_RADIUS_SQ = NURSE_HIVE_RADIUS ** 2  # PHASE 11.1: Pre-computed squared radius (62500.0)
+
+# PHASE 11.1: Pre-computed LUT arrays for branchless indexing (replaces np.choose overhead)
+CASTE_SPEED_LUT = np.array([SCOUT_SPEED_MULT, FORAGER_SPEED_MULT, NURSE_SPEED_MULT], dtype=np.float32)
+CASTE_JITTER_LUT = np.array([SCOUT_JITTER_MULT, FORAGER_JITTER_MULT, NURSE_JITTER_MULT], dtype=np.float32)
+CASTE_COHESION_LUT = np.array([1.0, 1.0, NURSE_COHESION_MULT], dtype=np.float32)  # Only nurses get 2.0×
+
+# ============================================================================
+# PHASE 11.2: VITALITY SYSTEM (Chronos - Option A)
+# ============================================================================
+# Maturity modulates performance WITHIN each caste (orthogonal to caste identity)
+# Maturity range: [0.0-1.0]
+#   Youth:   [0.0-0.2] - Reduced speed, increased cohesion (shy initiates)
+#   Prime:   [0.2-0.8] - Full caste performance (experts)
+#   Elder:   [0.8-1.0] - Reduced speed, increased jitter (fraying veterans)
+
+MATURITY_STEP = 0.0001        # Aging rate per frame (0.0001 @ 30Hz = ~3 min lifespan to reach 1.0)
+MATURITY_YOUTH_THRESHOLD = 0.2   # Below this: youth vitality penalties
+MATURITY_ELDER_THRESHOLD = 0.8   # Above this: elder vitality penalties
+
+# Vitality curve multipliers (applied ON TOP of caste base multipliers)
+VITALITY_YOUTH_SPEED = 0.7       # Youth move at 70% of caste base speed
+VITALITY_YOUTH_COHESION = 1.3    # Youth cluster 30% tighter (shier)
+VITALITY_ELDER_SPEED = 0.6       # Elders move at 60% of caste base speed
+VITALITY_ELDER_JITTER = 1.5      # Elders have 50% more jitter (neurological fraying)
 
 # ============================================================================
 # PHASE 4: PHEROMONE SYSTEM (The Garden)
 # ============================================================================
 PHEROMONE_GRID_SIZE = 128        # 128x128 pheromone grid
 PHEROMONE_UPDATE_HZ = 30         # Update frequency (matches sim tick)
-PHEROMONE_DECAY_FACTOR = 0.94    # Exponential decay per frame (30 Hz)
+PHEROMONE_DECAY_FACTOR = 0.94    # Exponential decay per frame (30 Hz) - LEGACY
 PHEROMONE_PULSE_AMPLITUDE = 1.0  # Constant pulse strength (vanguard only)
 PHEROMONE_GRADIENT_WEIGHT = 0.3  # Steering influence (persuasion, not command)
 PHEROMONE_GRADIENT_CLAMP = 5.0   # Max gradient magnitude for steering
+
+# PHASE 12.0: Dual-Channel Pheromones (Information Flow)
+RESOURCE_DECAY_FACTOR = 0.96      # Slow decay for stable food-to-hive trails (Foragers)
+EXPLORATION_DECAY_FACTOR = 0.88   # Fast decay for volatile territory markers (Scouts)
+SCOUT_EXPLORATION_AMPLITUDE = 1.2  # Scout pheromone pulse strength
+FORAGER_RESOURCE_AMPLITUDE = 1.0   # Forager pheromone pulse strength
 
 # ============================================================================
 # PHASE 4: RESOURCE MANAGER (Flowers)
@@ -275,7 +322,7 @@ def create_collision_mask():
 # - Auto-throttle at 14ms frame time breach
 
 # Debug Visual Limits
-MAX_DEBUG_HALOS = 3000           # Max bees to render halos for (culled by distance)
+MAX_DEBUG_HALOS = 200            # PHASE 14.0: Max halos (reduced from 3000 for Surface.copy() budget)
 THROTTLE_THRESHOLD_MS = 14.0     # Auto-disable debug if frame time exceeds this
 GPU_TEXTURE_BUDGET_MB = 10       # Maximum GPU texture memory usage
 GPU_SHADER_BUDGET_MS = 0.3       # Maximum GPU shader time per frame
@@ -289,13 +336,20 @@ DISTORTION_ENABLED = False       # Enable GPU distortion shader (auto-disabled i
 DISTORTION_AMPLITUDE = 8.0       # Max pixel displacement (pixels)
 DISTORTION_FREQUENCY = 0.5       # Perlin noise frequency
 
-# Halo System (Bee stress indicators)
-HALO_ENABLED = False             # Enable stress halos around bees
+# PHASE 14.0: Halo System (Caste semantics + vitality visualization)
+HALO_ENABLED = True              # Enable caste-specific halos (Scout/Forager/Nurse)
 HALO_RADIUS = 32                 # Halo texture size (pixels)
 HALO_CULL_DISTANCE = 1.5         # Cull factor (1.5x diagonal = visible bees only)
 
+# PHASE 14.0: Ghost-Bee Distance Shading (3-step color lookup)
+GHOST_COLOR_NEAR = (220, 200, 150)    # Bright Amber (< 300px from hive)
+GHOST_COLOR_MID = (150, 100, 50)      # Ochre (300-600px from hive)
+GHOST_COLOR_FAR = (60, 40, 20)        # Deep Umber (> 600px from hive)
+GHOST_DISTANCE_THRESHOLD_1 = 300.0    # Near/Mid boundary (px)
+GHOST_DISTANCE_THRESHOLD_2 = 600.0    # Mid/Far boundary (px)
+
 # Vignette System (Screen-space stress overlay)
-VINGNETTE_ENABLED = False         # Enable stress vignette
+VIGNETTE_ENABLED = False         # Enable stress vignette
 VIGNETTE_INNER_RADIUS = 0.6      # Inner radius (normalized 0-1)
 VIGNETTE_OUTER_RADIUS = 1.0      # Outer radius (normalized 0-1)
 

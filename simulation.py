@@ -168,16 +168,23 @@ class BeeSimulation:
             print(f"    Expected location: {project_state_path}")
             print()
         # ====================================================================
-        # TIER 1: Vanguard (100 bees, 20 attributes) - v2.1: 8-column core + 12 extended
+        # TIER 1: Vanguard (100 bees, 21 attributes) - v2.1: 8-column core + 13 extended (PHASE 11.2: +MATURITY)
         # ====================================================================
-        self.vanguard = np.zeros((MAX_VANGUARD, 20), dtype=np.float32)
+        self.vanguard = np.zeros((MAX_VANGUARD, 21), dtype=np.float32)
         self._init_vanguard()
 
         # ====================================================================
-        # TIER 2: Legion (500 bees, 15 attributes) - v2.1: 8-column core + 7 extended
+        # TIER 2: Legion (500 bees, 16 attributes) - v2.1: 8-column core + 8 extended (PHASE 11.2: +MATURITY)
         # ====================================================================
-        self.legion = np.zeros((MAX_LEGION, 15), dtype=np.float32)
+        self.legion = np.zeros((MAX_LEGION, 16), dtype=np.float32)
         self._init_legion()
+
+        # ====================================================================
+        # PHASE 13.0: GHOST BEES (4800 bees, 4 columns: x, y, vx, vy)
+        # Single-pixel LOD agents with no steering, no pheromones
+        # ====================================================================
+        self.ghost_bees = np.zeros((MAX_GHOST_BEES, 4), dtype=np.float32)
+        self._init_ghost_bees()
 
         # ====================================================================
         # TIER 3: Density Field (128×128×4 layers)
@@ -295,6 +302,9 @@ class BeeSimulation:
         self.vanguard[:, V_COHESION] = 0.5
         self.vanguard[:, V_TRAIL_PHASE] = np.random.uniform(0, 2 * np.pi, MAX_VANGUARD)
 
+        # PHASE 11.2: Initialize maturity with mixed-age society (0.0-0.9 to avoid instant elders)
+        self.vanguard[:, V_MATURITY] = np.random.uniform(0.0, 0.9, MAX_VANGUARD)
+
         # LEGACY: TRIAGE-002 biology (preserved for compatibility)
         self.vanguard[:, V_REGEN_RATE] = np.random.uniform(REGEN_RATE_MIN, REGEN_RATE_MAX, MAX_VANGUARD)
         self.vanguard[:, V_DEATH_THRESHOLD] = np.random.uniform(DEATH_THRESHOLD_MIN, DEATH_THRESHOLD_MAX, MAX_VANGUARD)
@@ -350,9 +360,30 @@ class BeeSimulation:
 
         self.legion[:, L_LOD_LEVEL] = 1  # Legion is LOD tier 1 (between Vanguard=0 and Nebula=2)
 
+        # PHASE 11.2: Initialize maturity with mixed-age society (0.0-0.9)
+        self.legion[:, L_MATURITY] = np.random.uniform(0.0, 0.9, MAX_LEGION)
+
         # LEGACY: TRIAGE-002 biology (preserved for compatibility)
         self.legion[:, L_REGEN_RATE] = np.random.uniform(REGEN_RATE_MIN, REGEN_RATE_MAX, MAX_LEGION)
         self.legion[:, L_DEATH_THRESHOLD] = np.random.uniform(DEATH_THRESHOLD_MIN, DEATH_THRESHOLD_MAX, MAX_LEGION)
+
+    def _init_ghost_bees(self):
+        """
+        PHASE 13.0: Initialize Ghost Bees with "Dawn Effect" - radiating from hive center.
+
+        Ghost bees are single-pixel LOD agents with no steering or pheromone interaction.
+        They burst outward from the hive center at initialization (The 6K Dawn).
+        """
+        # All ghosts start at hive center
+        self.ghost_bees[:, G_POS_X] = HIVE_CENTER_X
+        self.ghost_bees[:, G_POS_Y] = HIVE_CENTER_Y
+
+        # Dawn Effect: Radiating velocities in all directions
+        angles = np.random.uniform(0, 2 * np.pi, MAX_GHOST_BEES)
+        speeds = np.random.uniform(MAX_SPEED * 0.3, MAX_SPEED * 0.8, MAX_GHOST_BEES)  # Slower than intelligent bees
+
+        self.ghost_bees[:, G_VEL_X] = speeds * np.cos(angles)
+        self.ghost_bees[:, G_VEL_Y] = speeds * np.sin(angles)
 
     def update(self, dt):
         """
@@ -398,6 +429,11 @@ class BeeSimulation:
             t0 = time.perf_counter()
             self._update_legion(self.sim_dt)
             times['legion'] = (time.perf_counter() - t0) * 1000.0
+
+            # PHASE 13.0: Track Ghost Bee update time
+            t0 = time.perf_counter()
+            self._update_ghost_bees(self.sim_dt)
+            times['ghosts'] = (time.perf_counter() - t0) * 1000.0
 
             # Track Density Field update time
             t0 = time.perf_counter()
@@ -488,6 +524,30 @@ class BeeSimulation:
         empty_grid = []  # Placeholder since behaviors don't use it
 
         # ====================================================================
+        # PHASE 11.1: CASTE EXTRACTION (Extract once, reuse throughout)
+        # ====================================================================
+        caste_ids = (self.vanguard[:, V_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
+
+        # ====================================================================
+        # PHASE 11.2: VITALITY SCALARS (Maturity modulation)
+        # ====================================================================
+        maturity = self.vanguard[:, V_MATURITY]
+
+        # Build vitality multipliers using np.where (zero-allocation path)
+        is_youth = maturity < MATURITY_YOUTH_THRESHOLD
+        is_elder = maturity > MATURITY_ELDER_THRESHOLD
+
+        # Speed: youth=0.7, elder=0.6, prime=1.0
+        vitality_speed_mult = np.where(is_youth, VITALITY_YOUTH_SPEED,
+                                        np.where(is_elder, VITALITY_ELDER_SPEED, 1.0))
+
+        # Cohesion: youth=1.3, prime/elder=1.0
+        vitality_cohesion_mult = np.where(is_youth, VITALITY_YOUTH_COHESION, 1.0)
+
+        # Jitter: elder=1.5, youth/prime=1.0
+        vitality_jitter_mult = np.where(is_elder, VITALITY_ELDER_JITTER, 1.0)
+
+        # ====================================================================
         # v2.1 PHASE 1: STEERING BEHAVIORS
         # ====================================================================
         cohesion_force = apply_cohesion(positions, velocities, empty_grid)
@@ -495,16 +555,31 @@ class BeeSimulation:
         alignment_force = apply_alignment(positions, velocities, empty_grid)
         seek_force = apply_seek(positions, velocities, targets)
 
-        # PHASE 10: Caste-specific cohesion multipliers (branchless)
-        caste_ids_cohesion = (self.vanguard[:, V_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
-        cohesion_mults = np.choose(caste_ids_cohesion, [1.0, 1.0, NURSE_COHESION_MULT])  # Only nurses get 2.0×
+        # PHASE 11.2: Combined caste + vitality cohesion multipliers
+        cohesion_mults = CASTE_COHESION_LUT[caste_ids] * vitality_cohesion_mult
+
+        # PHASE 12.0: Caste-specific pheromone gradient steering
+        # Sample both gradients once (branchless), blend by caste
+        exploration_grad = self.pheromone_system.sample_exploration_gradient(positions, invert=True)
+        resource_grad = self.pheromone_system.sample_resource_gradient(positions)
+
+        # Build caste masks (vectorized)
+        is_scout = (caste_ids == CASTE_SCOUT).astype(np.float32)
+        is_forager = (caste_ids == CASTE_FORAGER).astype(np.float32)
+
+        # Blend gradients by caste (Scouts→exploration, Foragers→resource, Nurses→zero)
+        pheromone_force = (
+            exploration_grad * is_scout[:, np.newaxis] +
+            resource_grad * is_forager[:, np.newaxis]
+        )
 
         # Combine forces (cohesion dominates by 2×, nurses get extra 2× for 4× total)
         total_force = (
             cohesion_force * COHESION_FORCE * COHESION_DOMINANCE_RATIO * cohesion_mults[:, np.newaxis] +
             separation_force * SEPARATION_FORCE +
             alignment_force * ALIGNMENT_FORCE +
-            seek_force * SEEK_FORCE
+            seek_force * SEEK_FORCE +
+            pheromone_force * PHEROMONE_GRADIENT_WEIGHT
         )
 
         # Apply steering forces to velocities
@@ -514,9 +589,9 @@ class BeeSimulation:
         # ====================================================================
         # v2.1 PHASE 2: ORGANIC JITTER (BJI Restoration)
         # ====================================================================
-        # PHASE 10: Caste-specific jitter multipliers (branchless)
-        caste_ids_jitter = (self.vanguard[:, V_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
-        jitter_mults = np.choose(caste_ids_jitter, [SCOUT_JITTER_MULT, FORAGER_JITTER_MULT, NURSE_JITTER_MULT])
+        # PHASE 11.1: Direct LUT indexing for jitter multipliers
+        # PHASE 11.2: Apply vitality scalars (caste × vitality)
+        jitter_mults = CASTE_JITTER_LUT[caste_ids] * vitality_jitter_mult
 
         # Apply zero-mean Gaussian noise when alignment ≥ 70%
         self.vanguard[:, [V_VEL_X, V_VEL_Y]] = apply_organic_jitter(
@@ -527,12 +602,9 @@ class BeeSimulation:
         # ====================================================================
         # v2.1 PHASE 3: MAGNITUDE CLAMP (RED LINE: Velocity magnitude lock)
         # ====================================================================
-        # PHASE 10: Caste-specific speed limits (branchless scalar biasing)
-        # Extract caste IDs from STATE_FLAGS (bits 5-6)
-        caste_ids = (self.vanguard[:, V_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
-
-        # Build speed multiplier array (branchless using np.choose)
-        speed_mults = np.choose(caste_ids, [SCOUT_SPEED_MULT, FORAGER_SPEED_MULT, NURSE_SPEED_MULT])
+        # PHASE 11.1: Direct LUT indexing for speed multipliers
+        # PHASE 11.2: Apply vitality scalars (caste × vitality)
+        speed_mults = CASTE_SPEED_LUT[caste_ids] * vitality_speed_mult
         max_speeds = MAX_SPEED * speed_mults
 
         speeds = np.linalg.norm(self.vanguard[:, [V_VEL_X, V_VEL_Y]], axis=1)
@@ -545,23 +617,22 @@ class BeeSimulation:
         # ====================================================================
         self.vanguard[:, [V_POS_X, V_POS_Y]] += self.vanguard[:, [V_VEL_X, V_VEL_Y]] * dt
 
-        # PHASE 10: Nurse caste hive radius-locking (branchless constraint)
-        # Nurses stay within NURSE_HIVE_RADIUS of hive center
-        caste_ids_radius = (self.vanguard[:, V_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
-        is_nurse = (caste_ids_radius == CASTE_NURSE)
+        # PHASE 11.1: Nurse hive radius-locking (squared distance, no sqrt)
+        is_nurse = (caste_ids == CASTE_NURSE)
 
         if np.any(is_nurse):
-            # Calculate distance from hive center
+            # Calculate squared distance from hive center (avoid sqrt)
             dx = self.vanguard[is_nurse, V_POS_X] - HIVE_CENTER_X
             dy = self.vanguard[is_nurse, V_POS_Y] - HIVE_CENTER_Y
-            dist = np.sqrt(dx**2 + dy**2)
+            dist_sq = dx**2 + dy**2
 
-            # Find nurses beyond radius
-            beyond_radius = dist > NURSE_HIVE_RADIUS
+            # Find nurses beyond radius (squared comparison)
+            beyond_radius = dist_sq > NURSE_HIVE_RADIUS_SQ
 
             if np.any(beyond_radius):
-                # Pull back to radius boundary (elastic constraint)
-                scale = NURSE_HIVE_RADIUS / dist[beyond_radius]
+                # Pull back to radius boundary (now need sqrt only for scaling)
+                dist = np.sqrt(dist_sq[beyond_radius])
+                scale = NURSE_HIVE_RADIUS / dist
                 self.vanguard[is_nurse, V_POS_X][beyond_radius] = HIVE_CENTER_X + dx[beyond_radius] * scale
                 self.vanguard[is_nurse, V_POS_Y][beyond_radius] = HIVE_CENTER_Y + dy[beyond_radius] * scale
 
@@ -592,6 +663,10 @@ class BeeSimulation:
         # Update age
         self.vanguard[:, V_AGE] += dt
 
+        # PHASE 11.2: Batch aging (maturity increment)
+        self.vanguard[:, V_MATURITY] += MATURITY_STEP
+        self.vanguard[:, V_MATURITY] = np.clip(self.vanguard[:, V_MATURITY], 0.0, 1.0)
+
         # Update trail phase (for animation continuity)
         self.vanguard[:, V_TRAIL_PHASE] += dt * 2.0
 
@@ -608,6 +683,27 @@ class BeeSimulation:
         targets = self.legion[:, [L_TARGET_X, L_TARGET_Y]]
 
         # ====================================================================
+        # PHASE 11.1: CASTE EXTRACTION (Extract once, reuse throughout)
+        # ====================================================================
+        caste_ids = (self.legion[:, L_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
+
+        # ====================================================================
+        # PHASE 11.2: VITALITY SCALARS (Maturity modulation)
+        # ====================================================================
+        maturity = self.legion[:, L_MATURITY]
+
+        # Build vitality multipliers using np.where (zero-allocation path)
+        is_youth = maturity < MATURITY_YOUTH_THRESHOLD
+        is_elder = maturity > MATURITY_ELDER_THRESHOLD
+
+        # Speed: youth=0.7, elder=0.6, prime=1.0
+        vitality_speed_mult = np.where(is_youth, VITALITY_YOUTH_SPEED,
+                                        np.where(is_elder, VITALITY_ELDER_SPEED, 1.0))
+
+        # Jitter: elder=1.5, youth/prime=1.0
+        vitality_jitter_mult = np.where(is_elder, VITALITY_ELDER_JITTER, 1.0)
+
+        # ====================================================================
         # v2.1 SURGERY C: PROXY ALIGNMENT
         # Legion steers toward Vanguard's average velocity (simplified cohesion)
         # ====================================================================
@@ -616,14 +712,26 @@ class BeeSimulation:
 
         seek_force = apply_seek_simple(positions, velocities, targets)
 
-        # PHASE 4: Sample pheromone gradient for steering
-        gradient = self.pheromone_system.sample_gradient(positions)
+        # PHASE 12.0: Caste-specific pheromone gradient steering for Legion
+        # Sample both gradients once (branchless), blend by caste
+        exploration_grad = self.pheromone_system.sample_exploration_gradient(positions, invert=True)
+        resource_grad = self.pheromone_system.sample_resource_gradient(positions)
+
+        # Build caste masks (vectorized)
+        is_scout = (caste_ids == CASTE_SCOUT).astype(np.float32)
+        is_forager = (caste_ids == CASTE_FORAGER).astype(np.float32)
+
+        # Blend gradients by caste (Scouts→exploration, Foragers→resource, Nurses→zero)
+        pheromone_force = (
+            exploration_grad * is_scout[:, np.newaxis] +
+            resource_grad * is_forager[:, np.newaxis]
+        )
 
         # Combine forces: proxy_alignment + seek + pheromone gradient
         total_force = (
             proxy_force * 0.3 +  # Weak pull toward Vanguard behavior
             seek_force +
-            gradient * PHEROMONE_GRADIENT_WEIGHT
+            pheromone_force * PHEROMONE_GRADIENT_WEIGHT
         )
 
         self.legion[:, [L_VEL_X, L_VEL_Y]] += total_force * dt
@@ -632,9 +740,9 @@ class BeeSimulation:
         # ====================================================================
         # v2.1: ORGANIC JITTER (Legion also gets personality variance)
         # ====================================================================
-        # PHASE 10: Caste-specific jitter multipliers (branchless)
-        caste_ids_jitter = (self.legion[:, L_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
-        jitter_mults = np.choose(caste_ids_jitter, [SCOUT_JITTER_MULT, FORAGER_JITTER_MULT, NURSE_JITTER_MULT])
+        # PHASE 11.1: Direct LUT indexing for jitter multipliers
+        # PHASE 11.2: Apply vitality scalars (caste × vitality)
+        jitter_mults = CASTE_JITTER_LUT[caste_ids] * vitality_jitter_mult
 
         self.legion[:, [L_VEL_X, L_VEL_Y]] = apply_organic_jitter(
             self.legion[:, [L_VEL_X, L_VEL_Y]],
@@ -644,9 +752,9 @@ class BeeSimulation:
         # ====================================================================
         # v2.1: MAGNITUDE CLAMP (RED LINE: Velocity magnitude lock)
         # ====================================================================
-        # PHASE 10: Caste-specific speed limits (branchless scalar biasing)
-        caste_ids = (self.legion[:, L_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
-        speed_mults = np.choose(caste_ids, [SCOUT_SPEED_MULT, FORAGER_SPEED_MULT, NURSE_SPEED_MULT])
+        # PHASE 11.1: Direct LUT indexing for speed multipliers
+        # PHASE 11.2: Apply vitality scalars (caste × vitality)
+        speed_mults = CASTE_SPEED_LUT[caste_ids] * vitality_speed_mult
         max_speeds = MAX_SPEED * speed_mults
 
         speeds = np.linalg.norm(self.legion[:, [L_VEL_X, L_VEL_Y]], axis=1)
@@ -657,18 +765,18 @@ class BeeSimulation:
         # Update positions
         self.legion[:, [L_POS_X, L_POS_Y]] += self.legion[:, [L_VEL_X, L_VEL_Y]] * dt
 
-        # PHASE 10: Nurse caste hive radius-locking (branchless constraint)
-        caste_ids_radius = (self.legion[:, L_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
-        is_nurse = (caste_ids_radius == CASTE_NURSE)
+        # PHASE 11.1: Nurse hive radius-locking (squared distance, no sqrt)
+        is_nurse = (caste_ids == CASTE_NURSE)
 
         if np.any(is_nurse):
             dx = self.legion[is_nurse, L_POS_X] - HIVE_CENTER_X
             dy = self.legion[is_nurse, L_POS_Y] - HIVE_CENTER_Y
-            dist = np.sqrt(dx**2 + dy**2)
-            beyond_radius = dist > NURSE_HIVE_RADIUS
+            dist_sq = dx**2 + dy**2
+            beyond_radius = dist_sq > NURSE_HIVE_RADIUS_SQ
 
             if np.any(beyond_radius):
-                scale = NURSE_HIVE_RADIUS / dist[beyond_radius]
+                dist = np.sqrt(dist_sq[beyond_radius])
+                scale = NURSE_HIVE_RADIUS / dist
                 self.legion[is_nurse, L_POS_X][beyond_radius] = HIVE_CENTER_X + dx[beyond_radius] * scale
                 self.legion[is_nurse, L_POS_Y][beyond_radius] = HIVE_CENTER_Y + dy[beyond_radius] * scale
 
@@ -687,6 +795,41 @@ class BeeSimulation:
 
         # v2.1: Stress dynamics (power-law decay)
         apply_stress_dynamics(self.legion, dt, is_vanguard=False)
+
+        # PHASE 11.2: Batch aging (maturity increment)
+        self.legion[:, L_MATURITY] += MATURITY_STEP
+        self.legion[:, L_MATURITY] = np.clip(self.legion[:, L_MATURITY], 0.0, 1.0)
+
+    def _update_ghost_bees(self, dt):
+        """
+        PHASE 13.0: Update Ghost Bees - minimal LOD logic.
+
+        Ghost bees have no steering, no pheromones, just: pos += vel + jitter.
+        Boundary: World wrapping (bounce off edges).
+        """
+        # Apply Brownian jitter to velocities
+        jitter_x = np.random.uniform(-GHOST_BEE_JITTER, GHOST_BEE_JITTER, MAX_GHOST_BEES)
+        jitter_y = np.random.uniform(-GHOST_BEE_JITTER, GHOST_BEE_JITTER, MAX_GHOST_BEES)
+
+        self.ghost_bees[:, G_VEL_X] += jitter_x
+        self.ghost_bees[:, G_VEL_Y] += jitter_y
+
+        # Update positions: pos += vel * dt
+        self.ghost_bees[:, G_POS_X] += self.ghost_bees[:, G_VEL_X] * dt
+        self.ghost_bees[:, G_POS_Y] += self.ghost_bees[:, G_VEL_Y] * dt
+
+        # Boundary wrapping (clip to world bounds)
+        self.ghost_bees[:, G_POS_X] = np.clip(self.ghost_bees[:, G_POS_X], 0, WORLD_WIDTH)
+        self.ghost_bees[:, G_POS_Y] = np.clip(self.ghost_bees[:, G_POS_Y], 0, WORLD_HEIGHT)
+
+        # Bounce off edges (reverse velocity if at boundary)
+        at_left = self.ghost_bees[:, G_POS_X] <= 0
+        at_right = self.ghost_bees[:, G_POS_X] >= WORLD_WIDTH
+        at_top = self.ghost_bees[:, G_POS_Y] <= 0
+        at_bottom = self.ghost_bees[:, G_POS_Y] >= WORLD_HEIGHT
+
+        self.ghost_bees[at_left | at_right, G_VEL_X] *= -1
+        self.ghost_bees[at_top | at_bottom, G_VEL_Y] *= -1
 
     def _update_density_field(self, dt):
         """
@@ -921,22 +1064,31 @@ class BeeSimulation:
 
     def _update_pheromone_system(self, dt):
         """
-        PHASE 4: Update pheromone grid and deposit pulses from Vanguard.
+        PHASE 12.0: Update dual-channel pheromone system with caste-specific deposits.
 
-        Per architect specs:
-        - Only Vanguard (Tier 1) deposit pheromones when at flowers
-        - Constant pulse amplitude (no scaling)
-        - Legion (Tier 2) sample gradient for steering
+        Deposit logic:
+        - Scouts → Exploration grid (volatile markers)
+        - Foragers → Resource grid (stable food trails)
+        - Nurses → No deposits (hive-bound)
         """
-        # Vanguard deposit pulses when near flowers (seeking_food state)
         vanguard_positions = self.vanguard[:, [V_POS_X, V_POS_Y]]
 
-        # Deposit when seeking food (scout behavior)
+        # Extract caste IDs
+        caste_ids = (self.vanguard[:, V_STATE_FLAGS].astype(int) >> CASTE_BITS_OFFSET) & 0b11
+
+        # PHASE 12.0: Scouts deposit to exploration grid
+        is_scout = (caste_ids == CASTE_SCOUT)
+        if np.any(is_scout):
+            self.pheromone_system.deposit_exploration(vanguard_positions, mask=is_scout)
+
+        # PHASE 12.0: Foragers deposit to resource grid (when seeking food)
         seeking_mask = (self.vanguard[:, V_STATE_FLAGS].astype(np.int32) & FLAG_SEEKING_FOOD) != 0
+        is_forager = (caste_ids == CASTE_FORAGER)
+        forager_seeking = is_forager & seeking_mask
+        if np.any(forager_seeking):
+            self.pheromone_system.deposit_resource(vanguard_positions, mask=forager_seeking)
 
-        self.pheromone_system.deposit_pulse(vanguard_positions, mask=seeking_mask)
-
-        # Update pheromone grid (decay + blur + gradient computation)
+        # Update both pheromone grids (decay + blur + gradient computation)
         self.pheromone_system.update(dt)
 
     def _update_resources(self, dt):
@@ -971,15 +1123,20 @@ class BeeSimulation:
         Package data for renderer.
         Returns dict with vanguard, legion, nebula particle arrays.
         PHASE 4: Added flowers and pheromone heatmap.
+        PHASE 12.0: Added dual-channel pheromone grids (resource + exploration).
+        PHASE 13.0: Added ghost_bees (4800 single-pixel LOD agents).
         V6.0: Added coherence index.
         """
         return {
             'vanguard': self.vanguard,
             'legion': self.legion,
+            'ghost_bees': self.ghost_bees,                              # PHASE 13.0: Ghost-Bee Bridge
             'nebula': self.spawn_nebula_particles(),
             'density_field': self.density_field,
             'flowers': self.resource_manager.get_render_data(),
-            'pheromone_heatmap': self.pheromone_system.get_heatmap(),
+            'pheromone_heatmap': self.pheromone_system.get_heatmap(),  # Legacy fallback
+            'resource_grid': self.pheromone_system.resource_grid,       # PHASE 12.0: Forager trails
+            'exploration_grid': self.pheromone_system.exploration_grid, # PHASE 12.0: Scout markers
             'coherence_index': self.swarm_coherence_index
         }
 
