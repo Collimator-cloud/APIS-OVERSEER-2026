@@ -231,6 +231,7 @@ class BeeSimulation:
         # PHASE 14.0-REVISED: FOREST FLOOR (The Ecological Anchor)
         # ====================================================================
         self.forest_floor = self._create_forest_floor()
+        self._forest_floor_converted = False  # Flag for lazy convert()
 
         # ====================================================================
         # CAMERA (for LOD system)
@@ -254,21 +255,22 @@ class BeeSimulation:
         Returns:
             pygame.Surface: 1280x720 forest floor texture
         """
-        # Create base dark green-brown surface
+        # Create base dark green-brown surface (TRUTH PASS: increased visibility)
         floor_surface = pygame.Surface((1280, 720))
-        floor_surface.fill((10, 15, 8))  # Deep forest floor base
+        floor_surface.fill((25, 35, 22))  # Dark forest floor base (clearly visible)
 
-        # Generate 2,000 random grit pixels (earth tones)
+        # Generate 2,000 random grit pixels (earth tones - brightened for visibility)
         grit_count = 2000
         grit_colors = [
-            (15, 25, 10),   # Deep hunter green
-            (20, 18, 12),   # Dark earth brown
-            (12, 20, 8),    # Moss green
-            (18, 15, 10),   # Soil brown
-            (8, 12, 6),     # Shadow green
+            (35, 50, 28),   # Deep hunter green
+            (45, 42, 30),   # Dark earth brown
+            (32, 45, 25),   # Moss green
+            (42, 38, 28),   # Soil brown
+            (28, 32, 22),   # Shadow green
         ]
 
         # Use PixelArray for batch pixel-setting
+        grit_applied = 0
         try:
             pxarray = pygame.PixelArray(floor_surface)
 
@@ -281,12 +283,13 @@ class BeeSimulation:
                 color_rgb = grit_colors[np.random.randint(0, len(grit_colors))]
                 mapped_color = floor_surface.map_rgb(color_rgb)
                 pxarray[grit_x[i], grit_y[i]] = mapped_color
+                grit_applied += 1
 
             del pxarray  # Unlock surface
-        except:
-            pass  # Fallback: skip grit if PixelArray fails
+        except Exception as e:
+            print(f"[FOREST] Warning: PixelArray grit failed ({e})")
 
-        print(f"[FOREST] Floor texture generated (1280x720, {grit_count} grit pixels)")
+        print(f"[FOREST] Floor texture generated (1280x720, {grit_applied}/{grit_count} grit pixels)")
         return floor_surface
 
     def _init_vanguard(self):
@@ -1178,6 +1181,15 @@ class BeeSimulation:
         PHASE 14.0-REVISED: Added forest_floor (persistent ecological background).
         V6.0: Added coherence index.
         """
+        # FIX 3: Lazy convert() for forest floor (requires display mode)
+        if not self._forest_floor_converted:
+            try:
+                self.forest_floor = self.forest_floor.convert()
+                self._forest_floor_converted = True
+                print("[FOREST] Floor surface converted for optimal blitting")
+            except:
+                pass  # Fallback: keep unconverted surface
+
         return {
             'vanguard': self.vanguard,
             'legion': self.legion,

@@ -227,11 +227,11 @@ class Environment:
             camera_x, camera_y: Camera position
             screen_width, screen_height: Screen dimensions
         """
-        # Meadow patch colors (vibrant primaries)
+        # Meadow patch colors (vibrant primaries - NO PINK)
         meadow_colors = [
             (255, 255, 50),   # Bright Yellow (pollen)
             (255, 80, 80),    # Warm Red (berries)
-            (200, 100, 255),  # Purple (flowers)
+            (180, 80, 255),   # Deep Violet (flowers) - distinct from pink
             (255, 200, 60),   # Gold (nectar)
         ]
 

@@ -126,9 +126,8 @@ class BeeRenderer:
                 self._render_pheromone_heatmap(screen, render_data['pheromone_heatmap'],
                                               camera_x, camera_y, pheromone_opacity)
 
-        # PHASE 4: Render flowers
-        if 'flowers' in render_data:
-            self._render_flowers(screen, render_data['flowers'], camera_x, camera_y)
+        # PHASE 14.0-REVISED: Legacy flower rendering REMOVED
+        # Food sources now rendered by environment.render_food_sources() as meadow clusters
 
         # Render in layer order: Ghost Bees -> Nebula -> Legion -> Vanguard
         # PHASE 13.0: Render ghost bees if present
